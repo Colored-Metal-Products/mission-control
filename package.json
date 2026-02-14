@@ -12,16 +12,27 @@
   "build": {
     "appId": "com.mission-control.app",
     "mac": {
-      "category": "public.app-category.productivity"
+      "category": "public.app-category.productivity",
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "identity": null
     },
     "files": [
       "electron/**/*",
       ".next/**/*",
       "public/**/*"
-    ]
+    ],
+    "publish": {
+      "provider": "github",
+      "owner": "coloredmetalproducts",
+      "repo": "mission-control"
+    }
   },
   "dependencies": {
     "date-fns": "^3.3.1",
+    "electron-log": "^5.4.3",
     "electron-updater": "^6.7.3",
     "gray-matter": "^4.0.3",
     "lucide-react": "^0.563.0",
