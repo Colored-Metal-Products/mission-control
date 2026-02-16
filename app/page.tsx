@@ -16,9 +16,10 @@ import { FileText, CheckCircle, Users, UserCircle, Building, UsersRound } from '
 type ViewType = 'tasks' | 'content' | 'approvals' | 'council' | 'calendar' | 'projects' | 'memory' | 'docs' | 'people' | 'office' | 'team' | 'search'
 
 export default function Home() {
-  const [currentView, setCurrentView] = useState<ViewType>('memory')
+  const [currentView, setCurrentView] = useState<ViewType>('tasks')
   const [searchOpen, setSearchOpen] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [refreshKey, setRefreshKey] = useState(0)
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -89,6 +90,7 @@ export default function Home() {
       <TopBar 
         onSearchClick={() => { setSearchOpen(true); setCurrentView('search') }} 
         onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
+        onRefresh={() => setRefreshKey(k => k + 1)}
         sidebarOpen={sidebarOpen}
       />
       <div className="flex flex-1 overflow-hidden">
@@ -97,7 +99,7 @@ export default function Home() {
           onViewChange={setCurrentView} 
           isOpen={sidebarOpen}
         />
-        <main className="flex-1 overflow-hidden">
+        <main className="flex-1 overflow-hidden" key={refreshKey}>
           {renderView()}
         </main>
       </div>

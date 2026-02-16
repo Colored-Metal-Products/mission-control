@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Calendar, Filter, CheckCircle2, Circle, Clock, Flame } from 'lucide-react'
+import { Calendar, Filter, CheckCircle2, Circle, Clock, Flame, Plus, X, Save } from 'lucide-react'
 
 interface Task {
   id: string
@@ -10,6 +10,7 @@ interface Task {
   category: string
   urgency: 'must' | 'should' | 'normal'
   line: number
+  rawLine: string
 }
 
 interface DaySection {
@@ -30,16 +31,35 @@ const CATEGORY_COLORS = {
   misc: 'bg-gray-500/20 text-gray-400 border-gray-500/50',
 }
 
+interface EditingTask {
+  text: string
+  category: CategoryType
+  dayOffset: number // -2 = backlog, -1 = completed, 0 = today, 1 = tomorrow, etc.
+  urgency: 'must' | 'should' | 'normal'
+}
+
 export default function TasksView() {
   const [daySections, setDaySections] = useState<DaySection[]>([])
   const [backlogTasks, setBacklogTasks] = useState<Task[]>([])
   const [completedTasks, setCompletedTasks] = useState<Task[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [rawContent, setRawContent] = useState('')
   
-  const [selectedDay, setSelectedDay] = useState<number>(0) // 0 = today, 1 = tomorrow, etc., -1 = backlog
+  const [selectedDay, setSelectedDay] = useState<number>(0)
   const [selectedCategory, setSelectedCategory] = useState<CategoryType>('all')
   const [showCompleted, setShowCompleted] = useState(false)
+  
+  // Edit modal state
+  const [editingTask, setEditingTask] = useState<Task | null>(null)
+  const [isAddingTask, setIsAddingTask] = useState(false)
+  const [addTaskDayOffset, setAddTaskDayOffset] = useState<number>(0)
+  const [editForm, setEditForm] = useState<EditingTask>({
+    text: '',
+    category: 'misc',
+    dayOffset: 0,
+    urgency: 'normal',
+  })
 
   useEffect(() => {
     loadTasks()
@@ -50,6 +70,7 @@ export default function TasksView() {
       setLoading(true)
       setError(null)
       const fileContent = await window.electron.readFile('tasks.md')
+      setRawContent(fileContent.content)
       const { days, backlog, completed } = parseTasksFromMarkdown(fileContent.content)
       setDaySections(days)
       setBacklogTasks(backlog)
@@ -73,7 +94,6 @@ export default function TasksView() {
     let taskIndex = 0
 
     lines.forEach((line, index) => {
-      // Detect day headers (## Monday, Feb 16)
       const dayMatch = line.match(/^##\s+(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),\s+(.+)$/)
       if (dayMatch) {
         if (currentDay) {
@@ -91,7 +111,6 @@ export default function TasksView() {
         return
       }
 
-      // Detect Backlog section
       if (line.match(/^##\s+Backlog/i)) {
         if (currentDay) {
           days.push(currentDay)
@@ -101,13 +120,11 @@ export default function TasksView() {
         return
       }
 
-      // Detect Completed section
       if (line.match(/^##\s+Completed/i)) {
         currentSection = 'completed'
         return
       }
 
-      // Detect urgency subsections
       if (line.match(/^###\s+🔴\s+Must Do Today/)) {
         currentUrgency = 'must'
         return
@@ -117,7 +134,6 @@ export default function TasksView() {
         return
       }
 
-      // Parse task lines
       const taskMatch = line.match(/^-\s+\[([ xX])\]\s+\[([^\]]+)\]\s+(.+)$/)
       if (taskMatch) {
         const task: Task = {
@@ -127,6 +143,7 @@ export default function TasksView() {
           text: taskMatch[3].trim(),
           urgency: currentUrgency,
           line: index,
+          rawLine: line,
         }
 
         if (currentSection === 'completed') {
@@ -152,13 +169,177 @@ export default function TasksView() {
     return { days, backlog, completed }
   }
 
+  const toggleTaskCompletion = async (task: Task) => {
+    try {
+      const lines = rawContent.split('\n')
+      const now = new Date()
+      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+      const dateStr = `${monthNames[now.getMonth()]} ${now.getDate()}`
+      
+      if (!task.completed) {
+        // Mark as done and move to completed section
+        lines.splice(task.line, 1)
+        
+        // Find completed section
+        let completedIndex = lines.findIndex(line => line.match(/^##\s+Completed/i))
+        if (completedIndex === -1) {
+          // Add completed section at the end
+          lines.push('')
+          lines.push('## Completed (Recent)')
+          lines.push('')
+          completedIndex = lines.length - 1
+        }
+        
+        // Insert after the completed header
+        const newLine = `- [x] [${task.category}] ${task.text} (${dateStr})`
+        lines.splice(completedIndex + 1, 0, newLine)
+      } else {
+        // Unmark - just toggle the checkbox
+        lines[task.line] = lines[task.line].replace(/\[(x|X)\]/, '[ ]')
+      }
+      
+      const newContent = lines.join('\n')
+      await window.electron.writeFile('tasks.md', newContent)
+      await loadTasks()
+    } catch (err) {
+      console.error('Failed to toggle task:', err)
+      setError('Failed to update task')
+    }
+  }
+
+  const openEditTask = (task: Task) => {
+    // Determine day offset
+    let dayOffset = 0
+    if (completedTasks.includes(task)) {
+      dayOffset = -1 // completed
+    } else if (backlogTasks.includes(task)) {
+      dayOffset = -2 // backlog
+    } else {
+      // Find which day section
+      const dayIndex = daySections.findIndex(d => 
+        d.mustDo.includes(task) || d.shouldDo.includes(task) || d.normalTasks.includes(task)
+      )
+      if (dayIndex >= 0) {
+        const todayIndex = getTodayIndex()
+        dayOffset = dayIndex - todayIndex
+      }
+    }
+
+    setEditingTask(task)
+    setEditForm({
+      text: task.text,
+      category: task.category as CategoryType,
+      dayOffset,
+      urgency: task.urgency,
+    })
+  }
+
+  const openAddTask = (dayOffset: number) => {
+    setIsAddingTask(true)
+    setAddTaskDayOffset(dayOffset)
+    setEditForm({
+      text: '',
+      category: 'misc',
+      dayOffset,
+      urgency: 'normal',
+    })
+  }
+
+  const closeEditModal = () => {
+    setEditingTask(null)
+    setIsAddingTask(false)
+    setEditForm({ text: '', category: 'misc', dayOffset: 0, urgency: 'normal' })
+  }
+
+  const saveTask = async () => {
+    try {
+      if (!editForm.text.trim()) return
+
+      const lines = rawContent.split('\n')
+      
+      if (editingTask) {
+        // Remove old task
+        lines.splice(editingTask.line, 1)
+      }
+
+      // Find target section
+      let targetLineIndex = -1
+      const todayIndex = getTodayIndex()
+      
+      if (editForm.dayOffset === -2) {
+        // Backlog
+        const backlogIndex = lines.findIndex(line => line.match(/^##\s+Backlog/i))
+        if (backlogIndex >= 0) {
+          targetLineIndex = backlogIndex + 1
+        }
+      } else if (editForm.dayOffset === -1) {
+        // Completed
+        let completedIndex = lines.findIndex(line => line.match(/^##\s+Completed/i))
+        if (completedIndex === -1) {
+          lines.push('')
+          lines.push('## Completed (Recent)')
+          lines.push('')
+          completedIndex = lines.length - 1
+        }
+        targetLineIndex = completedIndex + 1
+      } else {
+        // Day section
+        const targetDayIndex = todayIndex + editForm.dayOffset
+        if (targetDayIndex >= 0 && targetDayIndex < daySections.length) {
+          const daySection = daySections[targetDayIndex]
+          const dayHeaderPattern = new RegExp(`^##\\s+${daySection.dayName},`)
+          const dayHeaderIndex = lines.findIndex(line => line.match(dayHeaderPattern))
+          
+          if (dayHeaderIndex >= 0) {
+            // Find the urgency section
+            if (editForm.urgency === 'must') {
+              const mustDoIndex = lines.findIndex((line, idx) => 
+                idx > dayHeaderIndex && line.match(/^###\s+🔴\s+Must Do Today/)
+              )
+              targetLineIndex = mustDoIndex >= 0 ? mustDoIndex + 1 : dayHeaderIndex + 1
+            } else if (editForm.urgency === 'should') {
+              const shouldDoIndex = lines.findIndex((line, idx) => 
+                idx > dayHeaderIndex && line.match(/^###\s+🟡\s+Should Do Today/)
+              )
+              targetLineIndex = shouldDoIndex >= 0 ? shouldDoIndex + 1 : dayHeaderIndex + 1
+            } else {
+              // Normal task - find end of urgency sections or after header
+              let insertIndex = dayHeaderIndex + 1
+              // Skip past urgency sections
+              while (insertIndex < lines.length && 
+                     (lines[insertIndex].match(/^###/) || 
+                      (lines[insertIndex].startsWith('- [') && !lines[insertIndex+1]?.match(/^##/)))) {
+                insertIndex++
+              }
+              targetLineIndex = insertIndex
+            }
+          }
+        }
+      }
+
+      if (targetLineIndex >= 0) {
+        const newLine = `- [ ] [${editForm.category}] ${editForm.text.trim()}`
+        lines.splice(targetLineIndex, 0, newLine)
+        
+        const newContent = lines.join('\n')
+        await window.electron.writeFile('tasks.md', newContent)
+        await loadTasks()
+        closeEditModal()
+      } else {
+        setError('Could not find target section')
+      }
+    } catch (err) {
+      console.error('Failed to save task:', err)
+      setError('Failed to save task')
+    }
+  }
+
   const filterByCategory = (tasks: Task[]): Task[] => {
     if (selectedCategory === 'all') return tasks
     return tasks.filter(t => t.category === selectedCategory)
   }
 
   const getTodayIndex = (): number => {
-    // Try to find "today" by matching current day name
     const now = new Date()
     const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
     const todayName = dayNames[now.getDay()]
@@ -175,12 +356,6 @@ export default function TasksView() {
     if (!daySection) {
       return { title: 'No tasks', tasks: [] }
     }
-
-    const allTasks = [
-      ...daySection.mustDo,
-      ...daySection.shouldDo,
-      ...daySection.normalTasks,
-    ]
 
     return {
       title: `${daySection.dayName}, ${daySection.date}`,
@@ -325,7 +500,12 @@ export default function TasksView() {
                   </div>
                   <div className="space-y-2">
                     {currentSection.mustDo.map(task => (
-                      <TaskItem key={task.id} task={task} />
+                      <TaskItem 
+                        key={task.id} 
+                        task={task} 
+                        onToggle={toggleTaskCompletion}
+                        onEdit={openEditTask}
+                      />
                     ))}
                   </div>
                 </div>
@@ -341,7 +521,12 @@ export default function TasksView() {
                   </div>
                   <div className="space-y-2">
                     {currentSection.shouldDo.map(task => (
-                      <TaskItem key={task.id} task={task} />
+                      <TaskItem 
+                        key={task.id} 
+                        task={task} 
+                        onToggle={toggleTaskCompletion}
+                        onEdit={openEditTask}
+                      />
                     ))}
                   </div>
                 </div>
@@ -352,11 +537,25 @@ export default function TasksView() {
                 <div>
                   <div className="space-y-2">
                     {currentSection.normalTasks.map(task => (
-                      <TaskItem key={task.id} task={task} />
+                      <TaskItem 
+                        key={task.id} 
+                        task={task} 
+                        onToggle={toggleTaskCompletion}
+                        onEdit={openEditTask}
+                      />
                     ))}
                   </div>
                 </div>
               )}
+
+              {/* Add Task Button */}
+              <button
+                onClick={() => openAddTask(selectedDay - getTodayIndex())}
+                className="w-full py-3 border-2 border-dashed border-[#3a3a3a] rounded-lg text-gray-500 hover:border-purple-500/50 hover:text-purple-400 transition-all flex items-center justify-center gap-2"
+              >
+                <Plus className="w-4 h-4" />
+                Add task
+              </button>
             </>
           )}
 
@@ -366,7 +565,12 @@ export default function TasksView() {
               {currentSection.tasks && currentSection.tasks.length > 0 ? (
                 <div className="space-y-2">
                   {currentSection.tasks.map(task => (
-                    <TaskItem key={task.id} task={task} />
+                    <TaskItem 
+                      key={task.id} 
+                      task={task} 
+                      onToggle={toggleTaskCompletion}
+                      onEdit={openEditTask}
+                    />
                   ))}
                 </div>
               ) : (
@@ -374,6 +578,15 @@ export default function TasksView() {
                   {selectedCategory === 'all' ? 'Backlog is empty' : 'No tasks in this category'}
                 </div>
               )}
+              
+              {/* Add Task Button for Backlog */}
+              <button
+                onClick={() => openAddTask(-2)}
+                className="w-full mt-4 py-3 border-2 border-dashed border-[#3a3a3a] rounded-lg text-gray-500 hover:border-purple-500/50 hover:text-purple-400 transition-all flex items-center justify-center gap-2"
+              >
+                <Plus className="w-4 h-4" />
+                Add task to backlog
+              </button>
             </div>
           )}
 
@@ -387,7 +600,12 @@ export default function TasksView() {
               </div>
               <div className="space-y-2">
                 {filterByCategory(completedTasks).map(task => (
-                  <TaskItem key={task.id} task={task} />
+                  <TaskItem 
+                    key={task.id} 
+                    task={task} 
+                    onToggle={toggleTaskCompletion}
+                    onEdit={openEditTask}
+                  />
                 ))}
               </div>
             </div>
@@ -404,11 +622,162 @@ export default function TasksView() {
           </div>
         )}
       </div>
+
+      {/* Edit Modal */}
+      {(editingTask || isAddingTask) && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={closeEditModal}>
+          <div className="bg-[#1a1a1a] border border-[#3a3a3a] rounded-xl p-6 w-full max-w-md shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold">
+                {isAddingTask ? 'Add Task' : 'Edit Task'}
+              </h3>
+              <button
+                onClick={closeEditModal}
+                className="text-gray-500 hover:text-gray-300 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {/* Task Text */}
+              <div>
+                <label className="block text-sm text-gray-400 mb-1.5">Task</label>
+                <input
+                  type="text"
+                  value={editForm.text}
+                  onChange={(e) => setEditForm({ ...editForm, text: e.target.value })}
+                  className="w-full px-3 py-2 bg-[#2a2a2a] border border-[#3a3a3a] rounded-lg text-gray-200 focus:outline-none focus:border-purple-500"
+                  placeholder="What needs to be done?"
+                  autoFocus
+                />
+              </div>
+
+              {/* Category */}
+              <div>
+                <label className="block text-sm text-gray-400 mb-1.5">Category</label>
+                <select
+                  value={editForm.category}
+                  onChange={(e) => setEditForm({ ...editForm, category: e.target.value as CategoryType })}
+                  className="w-full px-3 py-2 bg-[#2a2a2a] border border-[#3a3a3a] rounded-lg text-gray-200 focus:outline-none focus:border-purple-500"
+                >
+                  <option value="ops">Ops</option>
+                  <option value="marketing">Marketing</option>
+                  <option value="forge">Forge</option>
+                  <option value="finance">Finance</option>
+                  <option value="misc">Misc</option>
+                </select>
+              </div>
+
+              {/* Due Date */}
+              <div>
+                <label className="block text-sm text-gray-400 mb-1.5">Due Date</label>
+                <div className="grid grid-cols-4 gap-2">
+                  {getTodayIndex() >= 0 && daySections.slice(getTodayIndex(), getTodayIndex() + 5).map((day, idx) => {
+                    const offset = idx
+                    let label = offset === 0 ? 'Today' : offset === 1 ? 'Tomorrow' : `+${offset}`
+                    if (idx >= 2) label = day.dayName.slice(0, 3)
+                    
+                    return (
+                      <button
+                        key={idx}
+                        onClick={() => setEditForm({ ...editForm, dayOffset: offset })}
+                        className={`px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                          editForm.dayOffset === offset
+                            ? 'bg-purple-600 text-white'
+                            : 'bg-[#2a2a2a] text-gray-400 hover:bg-[#3a3a3a]'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    )
+                  })}
+                </div>
+                <button
+                  onClick={() => setEditForm({ ...editForm, dayOffset: -2 })}
+                  className={`mt-2 w-full px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                    editForm.dayOffset === -2
+                      ? 'bg-purple-600 text-white'
+                      : 'bg-[#2a2a2a] text-gray-400 hover:bg-[#3a3a3a]'
+                  }`}
+                >
+                  Backlog
+                </button>
+              </div>
+
+              {/* Urgency (only for day tasks, not backlog) */}
+              {editForm.dayOffset >= 0 && (
+                <div>
+                  <label className="block text-sm text-gray-400 mb-1.5">Priority</label>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setEditForm({ ...editForm, urgency: 'normal' })}
+                      className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                        editForm.urgency === 'normal'
+                          ? 'bg-gray-600 text-white'
+                          : 'bg-[#2a2a2a] text-gray-400 hover:bg-[#3a3a3a]'
+                      }`}
+                    >
+                      Normal
+                    </button>
+                    <button
+                      onClick={() => setEditForm({ ...editForm, urgency: 'should' })}
+                      className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                        editForm.urgency === 'should'
+                          ? 'bg-yellow-600 text-white'
+                          : 'bg-[#2a2a2a] text-gray-400 hover:bg-[#3a3a3a]'
+                      }`}
+                    >
+                      🟡 Should
+                    </button>
+                    <button
+                      onClick={() => setEditForm({ ...editForm, urgency: 'must' })}
+                      className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                        editForm.urgency === 'must'
+                          ? 'bg-red-600 text-white'
+                          : 'bg-[#2a2a2a] text-gray-400 hover:bg-[#3a3a3a]'
+                      }`}
+                    >
+                      🔴 Must
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex gap-3 pt-2">
+                <button
+                  onClick={closeEditModal}
+                  className="flex-1 px-4 py-2 bg-[#2a2a2a] hover:bg-[#3a3a3a] rounded-lg text-sm transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={saveTask}
+                  disabled={!editForm.text.trim()}
+                  className="flex-1 px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-lg text-sm transition-colors flex items-center justify-center gap-2"
+                >
+                  <Save className="w-4 h-4" />
+                  Save
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
 
-function TaskItem({ task }: { task: Task }) {
+function TaskItem({ 
+  task, 
+  onToggle, 
+  onEdit 
+}: { 
+  task: Task
+  onToggle: (task: Task) => void
+  onEdit: (task: Task) => void
+}) {
   const categoryColor = CATEGORY_COLORS[task.category as keyof typeof CATEGORY_COLORS] || CATEGORY_COLORS.misc
 
   return (
@@ -426,14 +795,23 @@ function TaskItem({ task }: { task: Task }) {
         }
       `}
     >
-      <div className="mt-0.5">
+      <div 
+        className="mt-0.5 cursor-pointer"
+        onClick={(e) => {
+          e.stopPropagation()
+          onToggle(task)
+        }}
+      >
         {task.completed ? (
           <CheckCircle2 className="w-5 h-5 text-purple-500" />
         ) : (
           <Circle className="w-5 h-5 text-gray-600 hover:text-purple-500 transition-colors" />
         )}
       </div>
-      <div className="flex-1">
+      <div 
+        className="flex-1 cursor-pointer"
+        onClick={() => onEdit(task)}
+      >
         <div className={`mb-1.5 ${task.completed ? 'line-through text-gray-500' : 'text-gray-200'}`}>
           {task.text}
         </div>

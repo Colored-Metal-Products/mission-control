@@ -5,17 +5,20 @@ import { Menu, Grid3x3, Search, Pause, Bell, RefreshCw } from 'lucide-react'
 interface TopBarProps {
   onSearchClick: () => void
   onToggleSidebar: () => void
+  onRefresh?: () => void
   sidebarOpen: boolean
 }
 
-export default function TopBar({ onSearchClick, onToggleSidebar, sidebarOpen }: TopBarProps) {
+export default function TopBar({ onSearchClick, onToggleSidebar, onRefresh, sidebarOpen }: TopBarProps) {
   const handlePingMozzie = () => {
     // This would send a notification to the main agent
     alert('Notification sent to Mozzie!')
   }
 
   const handleRefresh = () => {
-    window.location.reload()
+    if (onRefresh) {
+      onRefresh()
+    }
   }
 
   const handlePause = () => {

@@ -22,6 +22,7 @@ export interface MemoryFiles {
 interface ElectronAPI {
   getWorkspacePath: () => Promise<string>;
   readFile: (filePath: string) => Promise<FileContent>;
+  writeFile: (filePath: string, content: string) => Promise<{ success: boolean; size: number; modified: string }>;
   listFiles: (dirPath: string) => Promise<FileInfo[]>;
   searchFiles: (query: string) => Promise<FileInfo[]>;
   watchFile: (filePath: string) => Promise<boolean>;

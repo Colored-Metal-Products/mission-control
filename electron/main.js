@@ -169,6 +169,21 @@ ipcMain.handle('read-file', async (event, filePath) => {
   }
 });
 
+ipcMain.handle('write-file', async (event, filePath, content) => {
+  try {
+    const fullPath = path.join(WORKSPACE_PATH, filePath);
+    await fs.writeFile(fullPath, content, 'utf-8');
+    const stats = await fs.stat(fullPath);
+    return {
+      success: true,
+      size: stats.size,
+      modified: stats.mtime.toISOString(),
+    };
+  } catch (error) {
+    throw new Error(`Failed to write file: ${error.message}`);
+  }
+});
+
 ipcMain.handle('list-files', async (event, dirPath = '') => {
   try {
     const fullPath = path.join(WORKSPACE_PATH, dirPath);
