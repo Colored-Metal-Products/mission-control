@@ -1,8 +1,9 @@
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, protocol, net, Menu, dialog } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const path = require('path');
 const fs = require('fs').promises;
 const fsSync = require('fs');
+const url = require('url');
 
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
 const WORKSPACE_PATH = process.env.WORKSPACE_PATH || '/Users/mozzie/clawd';
@@ -28,18 +29,111 @@ function createWindow() {
     mainWindow.loadURL('http://localhost:3000');
     mainWindow.webContents.openDevTools();
   } else {
-    mainWindow.loadFile(path.join(__dirname, '../out/index.html'));
+    // Serve the static Next.js export via custom protocol
+    const outDir = path.join(__dirname, '../out');
+    mainWindow.loadURL('app://./index.html');
   }
 }
 
+// Register custom protocol to serve static files
+protocol.registerSchemesAsPrivileged([
+  { scheme: 'app', privileges: { standard: true, secure: true, supportFetchAPI: true } }
+]);
+
 app.whenReady().then(() => {
+  const outDir = path.join(__dirname, '../out');
+  
+  protocol.handle('app', (request) => {
+    let reqPath = new URL(request.url).pathname;
+    // Default to index.html
+    if (reqPath === '/') reqPath = '/index.html';
+    const filePath = path.join(outDir, reqPath);
+    return net.fetch(url.pathToFileURL(filePath).toString());
+  });
+
+  // Build application menu with Check for Updates
+  const template = [
+    {
+      label: app.name,
+      submenu: [
+        { role: 'about' },
+        { type: 'separator' },
+        { role: 'services' },
+        { type: 'separator' },
+        { role: 'hide' },
+        { role: 'hideOthers' },
+        { role: 'unhide' },
+        { type: 'separator' },
+        { role: 'quit' }
+      ]
+    },
+    { role: 'editMenu' },
+    { role: 'viewMenu' },
+    { role: 'windowMenu' },
+    {
+      label: 'Help',
+      submenu: [
+        {
+          label: 'Check for Updates...',
+          click: async () => {
+            try {
+              const result = await autoUpdater.checkForUpdates();
+              if (!result || !result.updateInfo || result.updateInfo.version === app.getVersion()) {
+                dialog.showMessageBox(mainWindow, {
+                  type: 'info',
+                  title: 'No Updates',
+                  message: `You're on the latest version (${app.getVersion()}).`
+                });
+              }
+            } catch (err) {
+              dialog.showMessageBox(mainWindow, {
+                type: 'error',
+                title: 'Update Error',
+                message: `Could not check for updates: ${err.message}`
+              });
+            }
+          }
+        }
+      ]
+    }
+  ];
+  
+  const menu = Menu.buildFromTemplate(template);
+  Menu.setApplicationMenu(menu);
+
   createWindow();
   
-  // Auto-update (skip in dev)
+  // Auto-update setup
   if (!isDev) {
     autoUpdater.logger = require('electron-log');
     autoUpdater.logger.transports.file.level = 'info';
-    autoUpdater.checkForUpdatesAndNotify();
+    autoUpdater.autoDownload = true;
+    autoUpdater.autoInstallOnAppQuit = true;
+    
+    // Show dialog when update is downloaded
+    autoUpdater.on('update-downloaded', (info) => {
+      dialog.showMessageBox(mainWindow, {
+        type: 'info',
+        title: 'Update Ready',
+        message: `Version ${info.version} has been downloaded. Restart to install?`,
+        buttons: ['Restart Now', 'Later']
+      }).then((result) => {
+        if (result.response === 0) {
+          autoUpdater.quitAndInstall();
+        }
+      });
+    });
+
+    autoUpdater.on('update-available', (info) => {
+      dialog.showMessageBox(mainWindow, {
+        type: 'info',
+        title: 'Update Available',
+        message: `Version ${info.version} is available. Downloading...`
+      });
+    });
+
+    // Check on launch
+    autoUpdater.checkForUpdates();
   }
 });
 
