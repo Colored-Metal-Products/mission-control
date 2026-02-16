@@ -406,7 +406,7 @@ ipcMain.handle('council-convene', async (event, { question, memberIds }) => {
     for (const memberId of memberIds) {
       try {
         // Read the member's soul file
-        const soulPath = path.join(WORKSPACE_PATH, 'council', 'members', `${memberId}.md`);
+        const soulPath = path.join(WORKSPACE_PATH, 'council', 'members', memberId, 'SOUL.md');
         const soulContent = await fs.readFile(soulPath, 'utf-8');
         
         // Construct the prompt
@@ -520,7 +520,7 @@ ipcMain.handle('council-boardroom-chat', async (event, { message, history }) => 
       memberIds.map(async (memberId) => {
         try {
           // Read the member's soul file
-          const soulPath = path.join(WORKSPACE_PATH, 'council', 'members', `${memberId}.md`);
+          const soulPath = path.join(WORKSPACE_PATH, 'council', 'members', memberId, 'SOUL.md');
           const soulContent = await fs.readFile(soulPath, 'utf-8');
           
           // Construct the prompt
@@ -694,7 +694,7 @@ Introduce the topic in 2-3 sentences. Be brief and set the stage for discussion.
       
       try {
         // Read the member's soul file
-        const soulPath = path.join(WORKSPACE_PATH, 'council', 'members', `${memberId}.md`);
+        const soulPath = path.join(WORKSPACE_PATH, 'council', 'members', memberId, 'SOUL.md');
         const soulContent = await fs.readFile(soulPath, 'utf-8');
         
         // Build conversation context
@@ -741,7 +741,7 @@ Respond naturally to what's been said. Keep it to 2-3 sentences. Be in character
     for (const [memberId1, memberId2] of crossTalkPairs) {
       try {
         // First member in pair
-        const soulPath1 = path.join(WORKSPACE_PATH, 'council', 'members', `${memberId1}.md`);
+        const soulPath1 = path.join(WORKSPACE_PATH, 'council', 'members', memberId1, 'SOUL.md');
         const soulContent1 = await fs.readFile(soulPath1, 'utf-8');
         const historyText = conversationHistory.join('\n\n---\n\n');
         
