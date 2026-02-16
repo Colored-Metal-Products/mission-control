@@ -9,6 +9,12 @@ contextBridge.exposeInMainWorld('electron', {
   watchFile: (filePath) => ipcRenderer.invoke('watch-file', filePath),
   getMemoryFiles: () => ipcRenderer.invoke('get-memory-files'),
   getDocs: () => ipcRenderer.invoke('get-docs'),
+  pingMozzie: (message) => ipcRenderer.invoke('ping-mozzie', message),
+  councilConvene: (params) => ipcRenderer.invoke('council-convene', params),
+  councilBoardroomChat: (params) => ipcRenderer.invoke('council-boardroom-chat', params),
+  councilAssignTask: (params) => ipcRenderer.invoke('council-assign-task', params),
+  councilGetTasks: () => ipcRenderer.invoke('council-get-tasks'),
+  councilStandup: (params) => ipcRenderer.invoke('council-standup', params),
   onFileChanged: (callback) => {
     ipcRenderer.on('file-changed', (event, filePath) => callback(filePath));
   },

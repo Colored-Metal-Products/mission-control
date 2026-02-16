@@ -10,7 +10,7 @@ import {
   Brain, 
   BookOpen, 
   UserCircle, 
-  Building, 
+  Layers, 
   UsersRound 
 } from 'lucide-react'
 
@@ -31,7 +31,7 @@ export default function Sidebar({ currentView, onViewChange, isOpen }: SidebarPr
     { id: 'memory', label: 'Memory', icon: Brain },
     { id: 'docs', label: 'Docs', icon: BookOpen },
     { id: 'people', label: 'People', icon: UserCircle },
-    { id: 'office', label: 'Office', icon: Building },
+    { id: 'office', label: 'Workspaces', icon: Layers },
     { id: 'team', label: 'Team', icon: UsersRound },
   ]
 

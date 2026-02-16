@@ -19,6 +19,57 @@ export interface MemoryFiles {
   projectFiles: FileInfo[];
 }
 
+export interface CouncilMemberResponse {
+  memberId: string;
+  text: string;
+  error: string | null;
+}
+
+export interface CouncilConveneResult {
+  responses: CouncilMemberResponse[];
+  synthesis: string;
+}
+
+export interface CouncilTask {
+  id: string;
+  leadMemberId: string;
+  taskTitle: string;
+  taskDescription: string;
+  status: 'pending' | 'in-progress' | 'review' | 'approved' | 'rejected';
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CouncilStandupMessage {
+  memberId: string;
+  text: string;
+}
+
+export interface CouncilStandupActionItem {
+  memberId: string;
+  description: string;
+}
+
+export interface CouncilStandupResult {
+  messages: CouncilStandupMessage[];
+  actionItems: CouncilStandupActionItem[];
+}
+
+export interface BoardroomChatMessage {
+  role: string;
+  name: string;
+  content: string;
+}
+
+export interface BoardroomChatResponse {
+  memberId: string;
+  text: string;
+}
+
+export interface BoardroomChatResult {
+  responses: BoardroomChatResponse[];
+}
+
 interface ElectronAPI {
   getWorkspacePath: () => Promise<string>;
   readFile: (filePath: string) => Promise<FileContent>;
@@ -28,6 +79,12 @@ interface ElectronAPI {
   watchFile: (filePath: string) => Promise<boolean>;
   getMemoryFiles: () => Promise<MemoryFiles>;
   getDocs: () => Promise<FileInfo[]>;
+  pingMozzie: (message: string) => Promise<{ success: boolean; response?: string; fallback?: boolean; message?: string }>;
+  councilConvene: (params: { question: string; memberIds: string[] }) => Promise<CouncilConveneResult>;
+  councilBoardroomChat: (params: { message: string; history: BoardroomChatMessage[] }) => Promise<BoardroomChatResult>;
+  councilAssignTask: (params: { leadMemberId: string; taskTitle: string; taskDescription: string }) => Promise<{ success: boolean; task: CouncilTask }>;
+  councilGetTasks: () => Promise<CouncilTask[]>;
+  councilStandup: (params: { topic: string; memberIds: string[]; rounds?: number }) => Promise<CouncilStandupResult>;
   onFileChanged: (callback: (filePath: string) => void) => void;
 }
 

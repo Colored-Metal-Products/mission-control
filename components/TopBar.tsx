@@ -1,6 +1,7 @@
 'use client'
 
-import { Menu, Grid3x3, Search, Pause, Bell, RefreshCw } from 'lucide-react'
+import { useState, useRef, useEffect } from 'react'
+import { Menu, Grid3x3, Search, Pause, Bell, RefreshCw, Send, X, Loader2 } from 'lucide-react'
 
 interface TopBarProps {
   onSearchClick: () => void
@@ -10,9 +11,38 @@ interface TopBarProps {
 }
 
 export default function TopBar({ onSearchClick, onToggleSidebar, onRefresh, sidebarOpen }: TopBarProps) {
+  const [pingOpen, setPingOpen] = useState(false)
+  const [pingMessage, setPingMessage] = useState('')
+  const [pingStatus, setPingStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle')
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (pingOpen && inputRef.current) {
+      inputRef.current.focus()
+    }
+  }, [pingOpen])
+
   const handlePingMozzie = () => {
-    // This would send a notification to the main agent
-    alert('Notification sent to Mozzie!')
+    setPingOpen(true)
+    setPingStatus('idle')
+    setPingMessage('')
+  }
+
+  const handleSendPing = async () => {
+    if (!pingMessage.trim()) return
+    setPingStatus('sending')
+    try {
+      const result = await (window as any).electron.pingMozzie(pingMessage.trim())
+      setPingStatus('sent')
+      setTimeout(() => {
+        setPingOpen(false)
+        setPingStatus('idle')
+        setPingMessage('')
+      }, 1500)
+    } catch (err) {
+      setPingStatus('error')
+      setTimeout(() => setPingStatus('idle'), 2000)
+    }
   }
 
   const handleRefresh = () => {
@@ -79,6 +109,60 @@ export default function TopBar({ onSearchClick, onToggleSidebar, onRefresh, side
           <RefreshCw className="w-5 h-5" />
         </button>
       </div>
+
+      {/* Ping Mozzie Modal */}
+      {pingOpen && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center pt-32 bg-black/50">
+          <div className="bg-[#1e1e1e] border border-[#3a3a3a] rounded-xl shadow-2xl w-[480px] p-5">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <span className="text-lg">🐺</span>
+                <h3 className="text-sm font-semibold text-white">Ping Mozzie</h3>
+              </div>
+              <button
+                onClick={() => { setPingOpen(false); setPingMessage(''); setPingStatus('idle') }}
+                className="p-1 rounded hover:bg-[#2a2a2a] text-gray-400 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="flex gap-2">
+              <input
+                ref={inputRef}
+                type="text"
+                value={pingMessage}
+                onChange={(e) => setPingMessage(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleSendPing() }}
+                placeholder="What do you need?"
+                disabled={pingStatus === 'sending' || pingStatus === 'sent'}
+                className="flex-1 px-3 py-2 bg-[#141414] border border-[#3a3a3a] rounded-lg text-sm text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 disabled:opacity-50"
+              />
+              <button
+                onClick={handleSendPing}
+                disabled={!pingMessage.trim() || pingStatus === 'sending' || pingStatus === 'sent'}
+                className="px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:hover:bg-purple-600 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors"
+              >
+                {pingStatus === 'sending' ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : pingStatus === 'sent' ? (
+                  <span>✓ Sent</span>
+                ) : (
+                  <>
+                    <Send className="w-4 h-4" />
+                    <span>Send</span>
+                  </>
+                )}
+              </button>
+            </div>
+            {pingStatus === 'error' && (
+              <p className="text-red-400 text-xs mt-2">Failed to send — message queued for next check-in</p>
+            )}
+            {pingStatus === 'sent' && (
+              <p className="text-green-400 text-xs mt-2">Message delivered to Mozzie 🐺</p>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

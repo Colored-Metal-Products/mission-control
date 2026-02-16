@@ -10,8 +10,11 @@ import DocsView from '@/components/DocsView'
 import SearchView from '@/components/SearchView'
 import CalendarView from '@/components/CalendarView'
 import ContentView from '@/components/ContentView'
+import CouncilView from '@/components/CouncilView'
 import ComingSoonView from '@/components/ComingSoonView'
+import WorkspacesView from '@/components/WorkspacesView'
 import { FileText, CheckCircle, Users, UserCircle, Building, UsersRound } from 'lucide-react'
+import ApprovalsView from '@/components/ApprovalsView'
 
 type ViewType = 'tasks' | 'content' | 'approvals' | 'council' | 'calendar' | 'projects' | 'memory' | 'docs' | 'people' | 'office' | 'team' | 'search'
 
@@ -51,17 +54,9 @@ export default function Home() {
       case 'content':
         return <ContentView />
       case 'approvals':
-        return <ComingSoonView 
-          title="Approvals" 
-          description="Review and approve pending items, requests, and decisions"
-          Icon={CheckCircle}
-        />
+        return <ApprovalsView />
       case 'council':
-        return <ComingSoonView 
-          title="Council" 
-          description="Collaborate with your AI council and get strategic insights"
-          Icon={Users}
-        />
+        return <CouncilView />
       case 'people':
         return <ComingSoonView 
           title="People" 
@@ -69,11 +64,7 @@ export default function Home() {
           Icon={UserCircle}
         />
       case 'office':
-        return <ComingSoonView 
-          title="Office" 
-          description="Business operations, admin, and workspace management"
-          Icon={Building}
-        />
+        return <WorkspacesView />
       case 'team':
         return <ComingSoonView 
           title="Team" 
