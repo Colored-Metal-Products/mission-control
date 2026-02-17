@@ -126,7 +126,9 @@ export default function CouncilView() {
   }
 
   const handleSendMessage = async () => {
+    console.log('handleSendMessage called', { chatInput, isSendingMessage, membersCount: members.length })
     if (!chatInput.trim() || isSendingMessage) return
+    console.log('handleSendMessage proceeding...')
 
     const userMessage: ChatMessage = {
       id: `msg-${Date.now()}`,
@@ -158,10 +160,12 @@ export default function CouncilView() {
       }))
 
       // Call the new boardroom chat handler
+      console.log('Calling councilBoardroomChat with message:', messageText)
       const result = await window.electron.councilBoardroomChat({
         message: messageText,
         history
       })
+      console.log('councilBoardroomChat result:', JSON.stringify(result).substring(0, 500))
 
       // Display each response with typing indicator
       for (const response of result.responses) {

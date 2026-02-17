@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { CheckCircle2, XCircle, MessageSquare, Clock, Filter, ChevronDown, ChevronUp, AlertCircle } from 'lucide-react'
+import { CheckCircle2, XCircle, MessageSquare, Clock, Filter, ChevronDown, ChevronUp, AlertCircle, ListTodo } from 'lucide-react'
 
 interface ApprovalItem {
   id: string
@@ -19,6 +19,8 @@ interface ApprovalItem {
   resolvedAt?: string
   category: string
   feedback?: string
+  taskCreated?: boolean
+  taskCreatedAt?: string
 }
 
 interface ApprovalsData {
@@ -142,6 +144,43 @@ export default function ApprovalsView() {
     setFeedbackInput(prev => ({ ...prev, [itemId]: '' }))
   }
 
+  const handleCreateTask = async (itemId: string) => {
+    try {
+      const item = items.find(i => i.id === itemId)
+      if (!item) return
+
+      // Read current tasks.md
+      const tasksResult = await window.electron.readFile('tasks.md')
+      let tasksContent = tasksResult.content
+
+      // Format the new task
+      const taskDate = new Date().toISOString().split('T')[0]
+      const newTask = `- [ ] ${item.title} (from ${item.submittedBy.name}) [${taskDate}]\n`
+
+      // Append to the end of the file
+      tasksContent = tasksContent.trimEnd() + '\n\n' + newTask
+
+      // Write back
+      await window.electron.writeFile('tasks.md', tasksContent)
+
+      // Update approval item
+      const updatedItems = items.map(i =>
+        i.id === itemId
+          ? { ...i, taskCreated: true, taskCreatedAt: new Date().toISOString() }
+          : i
+      )
+      await saveApprovals(updatedItems)
+
+      // Show success briefly
+      setError('✓ Task created successfully')
+      setTimeout(() => setError(null), 2000)
+    } catch (err) {
+      console.error('Failed to create task:', err)
+      setError('Failed to create task')
+      setTimeout(() => setError(null), 3000)
+    }
+  }
+
   const toggleExpanded = (itemId: string) => {
     const newExpanded = new Set(expandedItems)
     if (newExpanded.has(itemId)) {
@@ -247,6 +286,7 @@ export default function ApprovalsView() {
                 onApprove={() => handleApprove(item.id)}
                 onReject={() => handleReject(item.id)}
                 onRequestChanges={() => handleRequestChanges(item.id)}
+                onCreateTask={() => handleCreateTask(item.id)}
                 feedback={feedbackInput[item.id] || ''}
                 onFeedbackChange={(value) => setFeedbackInput(prev => ({ ...prev, [item.id]: value }))}
               />
@@ -278,6 +318,7 @@ function ApprovalCard({
   onApprove,
   onReject,
   onRequestChanges,
+  onCreateTask,
   feedback,
   onFeedbackChange
 }: { 
@@ -287,12 +328,14 @@ function ApprovalCard({
   onApprove: () => void
   onReject: () => void
   onRequestChanges: () => void
+  onCreateTask: () => void
   feedback: string
   onFeedbackChange: (value: string) => void
 }) {
   const memberColor = MEMBER_COLORS[item.submittedBy.id] || MEMBER_COLORS.main
   const categoryColor = CATEGORY_COLORS[item.category] || 'bg-gray-500/20 text-gray-400 border-gray-500/50'
   const isPending = item.status === 'pending'
+  const isApproved = item.status === 'approved'
   const [showFeedbackInput, setShowFeedbackInput] = useState(false)
 
   return (
@@ -398,6 +441,32 @@ function ApprovalCard({
               <MessageSquare className="w-4 h-4" />
               Request Changes
             </button>
+          </div>
+        )}
+
+        {/* Create Task Button (for approved items) */}
+        {isApproved && !item.taskCreated && (
+          <div className="flex items-center gap-3">
+            <button
+              onClick={onCreateTask}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-medium transition-all"
+            >
+              <ListTodo className="w-4 h-4" />
+              Create Task
+            </button>
+          </div>
+        )}
+
+        {/* Task Created Indicator */}
+        {item.taskCreated && (
+          <div className="p-3 bg-purple-500/10 border border-purple-500/30 rounded-lg">
+            <div className="text-xs font-semibold text-purple-400 mb-0.5 flex items-center gap-1.5">
+              <ListTodo className="w-3.5 h-3.5" />
+              Task Created
+            </div>
+            <div className="text-xs text-purple-300">
+              Added to tasks.md {item.taskCreatedAt && `on ${formatTimestamp(item.taskCreatedAt)}`}
+            </div>
           </div>
         )}
 

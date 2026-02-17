@@ -1,5 +1,27 @@
 # Mission Control - Project Status
 
+## ✅ V2.1.0 - Council → Tasks Integration
+
+**Date**: February 17, 2026  
+**Status**: Production-ready
+
+### What's New
+
+#### **Create Tasks from Approved Items** ✅
+- **One-click task creation** from approved Council proposals
+- "Create Task" button appears on approved items that haven't been converted yet
+- Automatically appends formatted task to `tasks.md` with:
+  - Council member attribution (e.g., "from Elon")
+  - Date stamp
+  - Original approval title
+- Tracks which approvals have been converted (prevents duplicates)
+- Shows "Task Created" indicator with timestamp on converted items
+- **Closes the loop**: Council proposes → Jamie approves → becomes tracked task
+
+This feature solves a key workflow gap: approved action items from Council standups and boardroom sessions can now flow directly into the daily task system.
+
+---
+
 ## ✅ Completed - V2 POLISH
 
 **Date**: February 12, 2026  

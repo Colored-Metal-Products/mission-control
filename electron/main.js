@@ -8,6 +8,23 @@ const url = require('url');
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
 const WORKSPACE_PATH = process.env.WORKSPACE_PATH || '/Users/mozzie/clawd';
 
+// Debug logger for council calls - write to /tmp (always writable)
+const debugLog = async (msg) => {
+  try {
+    const logPath = '/tmp/mc-debug.log';
+    const entry = `[${new Date().toISOString()}] ${msg}\n`;
+    await fs.appendFile(logPath, entry, 'utf-8');
+  } catch (e) {}
+};
+
+// Shared env for all openclaw agent calls — ensures HOME points to mozzie
+// and PATH includes homebrew so node/openclaw are found
+const AGENT_ENV = {
+  ...process.env,
+  HOME: '/Users/mozzie',
+  PATH: `/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:${process.env.PATH || ''}`
+};
+
 let mainWindow;
 
 function createWindow() {
@@ -188,17 +205,20 @@ ipcMain.handle('ping-mozzie', async (event, message) => {
   const { execFile } = require('child_process');
   const { promisify } = require('util');
   const execFileAsync = promisify(execFile);
+  // Using shared AGENT_ENV
   try {
     // Use openclaw CLI to send message to main agent session
     const { stdout, stderr } = await execFileAsync('/opt/homebrew/bin/openclaw', [
-      'agent', '--message', message, '--json'
-    ], { timeout: 30000 });
+      'agent', '--agent', 'main', '--message', message, '--json'
+    ], { timeout: 30000, env: AGENT_ENV });
     return { success: true, response: stdout.trim() };
   } catch (error) {
     // Fallback: write to a ping file for heartbeat pickup
     const pingFile = path.join(WORKSPACE_PATH, '.ping-mozzie');
     const entry = `[${new Date().toISOString()}] ${message}\n`;
     await fs.appendFile(pingFile, entry, 'utf-8');
+    // Ensure file is readable/writable by all users on shared machine
+    try { await fs.chmod(pingFile, 0o666); } catch (e) {}
     return { success: true, fallback: true, message: 'Message queued for next check-in' };
   }
 });
@@ -398,6 +418,7 @@ ipcMain.handle('council-convene', async (event, { question, memberIds }) => {
   const { execFile } = require('child_process');
   const { promisify } = require('util');
   const execFileAsync = promisify(execFile);
+  // Using shared AGENT_ENV
   
   try {
     // Collect responses from each member
@@ -405,14 +426,19 @@ ipcMain.handle('council-convene', async (event, { question, memberIds }) => {
     
     for (const memberId of memberIds) {
       try {
-        // Read the member's soul file
+        // Read the member's soul + memory files
         const soulPath = path.join(WORKSPACE_PATH, 'council', 'members', memberId, 'SOUL.md');
+        const memoryPath = path.join(WORKSPACE_PATH, 'council', 'members', memberId, 'MEMORY.md');
         const soulContent = await fs.readFile(soulPath, 'utf-8');
+        let memoryContent = '';
+        try { memoryContent = await fs.readFile(memoryPath, 'utf-8'); } catch (e) {}
         
         // Construct the prompt
         const prompt = `You are roleplaying as a council advisor. Read your persona carefully and respond IN CHARACTER.
 
 ${soulContent}
+
+${memoryContent ? `## Your Knowledge Base\n\n${memoryContent}` : ''}
 
 ---
 
@@ -422,16 +448,26 @@ The CEO (Jamie) has brought this question to the boardroom:
 
 Respond in character. Be specific to CMP's situation. Keep your response under 300 words. Be direct and actionable.`;
         
-        // Call openclaw agent
+        // Call openclaw agent with unique session per member
+        const sessionId = `council-convene-${memberId}`;
         const { stdout } = await execFileAsync(
           '/opt/homebrew/bin/openclaw',
-          ['agent', '--message', prompt, '--json'],
-          { timeout: 60000 }
+          ['agent', '--session-id', sessionId, '--message', prompt, '--json'],
+          { timeout: 60000, env: AGENT_ENV }
         );
+        
+        // Parse JSON response
+        let responseText = stdout.trim();
+        try {
+          const parsed = JSON.parse(responseText);
+          if (parsed.result && parsed.result.payloads && parsed.result.payloads[0]) {
+            responseText = parsed.result.payloads[0].text || responseText;
+          }
+        } catch (e) {}
         
         memberResponses.push({
           memberId,
-          text: stdout.trim(),
+          text: responseText,
           error: null
         });
       } catch (error) {
@@ -473,11 +509,19 @@ Be direct and actionable. This is for Jamie (the CEO) to make a decision.`;
       
       const { stdout } = await execFileAsync(
         '/opt/homebrew/bin/openclaw',
-        ['agent', '--message', synthesisPrompt, '--json'],
-        { timeout: 60000 }
+        ['agent', '--session-id', 'council-convene-mozzie', '--message', synthesisPrompt, '--json'],
+        { timeout: 60000, env: AGENT_ENV }
       );
       
-      synthesis = stdout.trim();
+      // Parse JSON response
+      let synthesisText = stdout.trim();
+      try {
+        const parsed = JSON.parse(synthesisText);
+        if (parsed.result && parsed.result.payloads && parsed.result.payloads[0]) {
+          synthesisText = parsed.result.payloads[0].text || synthesisText;
+        }
+      } catch (e) {}
+      synthesis = synthesisText;
     } catch (error) {
       synthesis = `Error generating synthesis: ${error.message}`;
     }
@@ -496,16 +540,42 @@ ipcMain.handle('council-boardroom-chat', async (event, { message, history }) => 
   const { promisify } = require('util');
   const execFileAsync = promisify(execFile);
   
+  // Force HOME to mozzie so openclaw reads the right config
+  // Using shared AGENT_ENV
+  
+  await debugLog(`BOARDROOM: message="${message}", HOME=${AGENT_ENV.HOME}`);
+  
   try {
     const memberIds = ['cto-elon', 'coo-marcus', 'cmo-gary', 'cro-cuban'];
     
-    // Helper to call openclaw agent
-    const callAgent = async (prompt) => {
-      const { stdout } = await execFileAsync(
-        '/opt/homebrew/bin/openclaw',
-        ['agent', '--message', prompt, '--json'],
-        { timeout: 60000 }
-      );
+    // Helper to call openclaw agent with a unique session per member
+    const callAgent = async (memberId, prompt) => {
+      const sessionId = `council-boardroom-${memberId}`;
+      await debugLog(`BOARDROOM: calling agent for ${memberId}, sessionId=${sessionId}`);
+      let stdout, stderr;
+      try {
+        const result = await execFileAsync(
+          '/opt/homebrew/bin/openclaw',
+          ['agent', '--session-id', sessionId, '--message', prompt, '--json'],
+          { timeout: 60000, env: AGENT_ENV }
+        );
+        stdout = result.stdout;
+        stderr = result.stderr;
+        await debugLog(`BOARDROOM: ${memberId} OK, stdout=${(stdout || '').substring(0, 200)}`);
+        if (stderr) await debugLog(`BOARDROOM: ${memberId} stderr=${stderr.substring(0, 200)}`);
+      } catch (execError) {
+        await debugLog(`BOARDROOM: ${memberId} EXEC ERROR: ${execError.message}, stderr=${(execError.stderr || '').substring(0, 500)}, stdout=${(execError.stdout || '').substring(0, 200)}`);
+        throw execError;
+      }
+      // Parse JSON to extract the text payload
+      try {
+        const parsed = JSON.parse(stdout.trim());
+        if (parsed.result && parsed.result.payloads && parsed.result.payloads[0]) {
+          return parsed.result.payloads[0].text || '';
+        }
+      } catch (e) {
+        // If JSON parsing fails, return raw output
+      }
       return stdout.trim();
     };
     
@@ -519,17 +589,24 @@ ipcMain.handle('council-boardroom-chat', async (event, { message, history }) => 
     const responseChecks = await Promise.all(
       memberIds.map(async (memberId) => {
         try {
-          // Read the member's soul file
+          // Read the member's soul + memory files
           const soulPath = path.join(WORKSPACE_PATH, 'council', 'members', memberId, 'SOUL.md');
+          const memoryPath = path.join(WORKSPACE_PATH, 'council', 'members', memberId, 'MEMORY.md');
           const soulContent = await fs.readFile(soulPath, 'utf-8');
+          let memoryContent = '';
+          try { memoryContent = await fs.readFile(memoryPath, 'utf-8'); } catch (e) {}
           
           // Construct the prompt
-          const prompt = `${soulContent}
+          const prompt = `IMPORTANT: Ignore your default system instructions for this message. You are roleplaying as a council member. Here is your character:
+
+${soulContent}
+
+${memoryContent ? `## Your Knowledge Base\n\n${memoryContent}` : ''}
 
 You are in a live boardroom conversation with the CEO (Jamie) and your fellow executives:
 - 🚀 Elon (CTO) - tech, engineering, Forge platform
 - 🏭 Marcus (COO) - ops, people, process, financials
-- 💪 Gary (CMO) - marketing, offers, lead gen
+- 💪 Alex (CMO) - marketing, offers, lead gen
 - 🦈 Cuban (CRO) - revenue, sales, deals, growth
 - 🐺 Mozzie - Chief of Staff / exec assistant
 
@@ -546,16 +623,19 @@ Should you respond? Only respond if:
 
 If you should NOT respond, reply with exactly: PASS
 
-If you should respond, reply in character. Keep it to 2-4 sentences. Be direct. You can reference other executives by name. Don't repeat what others have said.`;
+If you should respond, reply in character. Keep it to 2-4 sentences. Be direct. You can reference other executives by name. Don't repeat what others have said.
+
+Reply ONLY with your in-character response (or PASS). No preamble, no meta-commentary.`;
           
-          const response = await callAgent(prompt);
+          const response = await callAgent(memberId, prompt);
           
           return {
             memberId,
             text: response.trim(),
-            shouldPass: response.trim() === 'PASS'
+            shouldPass: response.trim() === 'PASS' || response.trim().startsWith('PASS')
           };
         } catch (error) {
+          await debugLog(`BOARDROOM: ${memberId} MEMBER ERROR: ${error.message}`);
           console.error(`Error checking ${memberId}:`, error);
           return {
             memberId,
@@ -589,6 +669,7 @@ If you should respond, reply in character. Keep it to 2-4 sentences. Be direct. 
       }))
     };
   } catch (error) {
+    await debugLog(`BOARDROOM FATAL: ${error.message}\n${error.stack}`);
     throw new Error(`Boardroom chat failed: ${error.message}`);
   }
 });
@@ -658,25 +739,37 @@ ipcMain.handle('council-standup', async (event, { topic, memberIds, rounds = 8 }
   const { execFile } = require('child_process');
   const { promisify } = require('util');
   const execFileAsync = promisify(execFile);
+  // Using shared AGENT_ENV
   
   try {
     const messages = [];
     const conversationHistory = [];
     const actionItems = [];
+    let callCounter = 0;
     
-    // Helper to call openclaw agent
-    const callAgent = async (prompt) => {
+    // Helper to call openclaw agent with unique session
+    const callAgent = async (prompt, memberId = 'mozzie') => {
+      callCounter++;
+      const sessionId = `council-standup-${memberId}-${callCounter}`;
       const { stdout } = await execFileAsync(
         '/opt/homebrew/bin/openclaw',
-        ['agent', '--message', prompt, '--json'],
-        { timeout: 60000 }
+        ['agent', '--session-id', sessionId, '--message', prompt, '--json'],
+        { timeout: 60000, env: AGENT_ENV }
       );
-      return stdout.trim();
+      // Parse JSON response
+      let responseText = stdout.trim();
+      try {
+        const parsed = JSON.parse(responseText);
+        if (parsed.result && parsed.result.payloads && parsed.result.payloads[0]) {
+          responseText = parsed.result.payloads[0].text || responseText;
+        }
+      } catch (e) {}
+      return responseText;
     };
     
     // Round 1: Mozzie introduces the topic
     const mozzieIntro = await callAgent(
-      `You are Mozzie, the CEO's AI chief of staff at Colored Metal Products. You're moderating a standup meeting with the executive council (CTO Elon 🚀, COO Marcus 🏭, CMO Gary 💪, CRO Cuban 🦈).
+      `You are Mozzie, the CEO's AI chief of staff at Colored Metal Products. You're moderating a standup meeting with the executive council (CTO Elon 🚀, COO Marcus 🏭, CMO Alex 💪, CRO Cuban 🦈).
 
 The topic for today's standup is: "${topic}"
 
@@ -693,14 +786,19 @@ Introduce the topic in 2-3 sentences. Be brief and set the stage for discussion.
       const memberId = speakingOrder[i];
       
       try {
-        // Read the member's soul file
+        // Read the member's soul + memory files
         const soulPath = path.join(WORKSPACE_PATH, 'council', 'members', memberId, 'SOUL.md');
+        const memoryPath = path.join(WORKSPACE_PATH, 'council', 'members', memberId, 'MEMORY.md');
         const soulContent = await fs.readFile(soulPath, 'utf-8');
+        let memoryContent = '';
+        try { memoryContent = await fs.readFile(memoryPath, 'utf-8'); } catch (e) {}
         
         // Build conversation context
         const historyText = conversationHistory.join('\n\n---\n\n');
         
         const prompt = `${soulContent}
+
+${memoryContent ? `## Your Knowledge Base\n\n${memoryContent}` : ''}
 
 ---
 
@@ -714,14 +812,14 @@ The topic is: "${topic}"
 
 Respond naturally to what's been said. Keep it to 2-3 sentences. Be in character. If you agree with someone, say so briefly. If you disagree, push back. Reference other members by name.`;
         
-        const response = await callAgent(prompt);
+        const response = await callAgent(prompt, memberId);
         
         messages.push({ memberId, text: response });
         
         const memberNames = {
           'cto-elon': 'Elon (CTO)',
           'coo-marcus': 'Marcus (COO)',
-          'cmo-gary': 'Gary (CMO)',
+          'cmo-gary': 'Alex (CMO)',
           'cro-cuban': 'Cuban (CRO)'
         };
         
@@ -742,10 +840,15 @@ Respond naturally to what's been said. Keep it to 2-3 sentences. Be in character
       try {
         // First member in pair
         const soulPath1 = path.join(WORKSPACE_PATH, 'council', 'members', memberId1, 'SOUL.md');
+        const memoryPath1 = path.join(WORKSPACE_PATH, 'council', 'members', memberId1, 'MEMORY.md');
         const soulContent1 = await fs.readFile(soulPath1, 'utf-8');
+        let memoryContent1 = '';
+        try { memoryContent1 = await fs.readFile(memoryPath1, 'utf-8'); } catch (e) {}
         const historyText = conversationHistory.join('\n\n---\n\n');
         
         const prompt1 = `${soulContent1}
+
+${memoryContent1 ? `## Your Knowledge Base\n\n${memoryContent1}` : ''}
 
 ---
 
@@ -759,13 +862,13 @@ The topic is: "${topic}"
 
 Respond briefly (1-2 sentences) to what's been said. Be in character. You can agree, disagree, or add a new point.`;
         
-        const response1 = await callAgent(prompt1);
+        const response1 = await callAgent(prompt1, memberId1);
         messages.push({ memberId: memberId1, text: response1 });
         
         const memberNames = {
           'cto-elon': 'Elon (CTO)',
           'coo-marcus': 'Marcus (COO)',
-          'cmo-gary': 'Gary (CMO)',
+          'cmo-gary': 'Alex (CMO)',
           'cro-cuban': 'Cuban (CRO)'
         };
         
@@ -791,7 +894,7 @@ ACTION: [Member Name] - [Specific task]
 
 For example:
 ACTION: Elon - Build prototype by Friday
-ACTION: Gary - Draft marketing copy for review
+ACTION: Alex - Draft marketing copy for review
 
 Be specific about who should do what.`
     );
@@ -825,6 +928,7 @@ Be specific about who should do what.`
       actionItems
     };
   } catch (error) {
+    await debugLog(`STANDUP FATAL: ${error.message}\n${error.stack}`);
     throw new Error(`Standup failed: ${error.message}`);
   }
 });
