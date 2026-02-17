@@ -1,6 +1,6 @@
 {
   "name": "mission-control",
-  "version": "2.0.2",
+  "version": "2.1.0",
   "description": "Mission Control - Jamie's Second Brain",
   "main": "electron/main.js",
   "scripts": {
