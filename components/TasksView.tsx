@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { Calendar, Filter, CheckCircle2, Circle, Clock, Flame, Plus, X, Save } from 'lucide-react'
+import { useState, useEffect, useCallback } from 'react'
+import { Calendar, Filter, CheckCircle2, Circle, Clock, Flame, Plus, X, Save, Keyboard } from 'lucide-react'
 
 interface Task {
   id: string
@@ -60,10 +60,130 @@ export default function TasksView() {
     dayOffset: 0,
     urgency: 'normal',
   })
+  
+  // Keyboard navigation state
+  const [selectedTaskIndex, setSelectedTaskIndex] = useState<number>(-1)
+  const [showShortcuts, setShowShortcuts] = useState(false)
 
   useEffect(() => {
     loadTasks()
   }, [])
+  
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore if typing in input/textarea or modal is open
+      if (e.target instanceof HTMLInputElement || 
+          e.target instanceof HTMLTextAreaElement ||
+          e.target instanceof HTMLSelectElement ||
+          editingTask !== null ||
+          isAddingTask ||
+          showShortcuts) {
+        // Allow Escape to close modals
+        if (e.key === 'Escape') {
+          if (showShortcuts) {
+            setShowShortcuts(false)
+          } else {
+            closeEditModal()
+          }
+        }
+        return
+      }
+      
+      const currentTasks = getCurrentTaskList()
+      
+      switch (e.key.toLowerCase()) {
+        case 'n':
+          e.preventDefault()
+          openAddTask(selectedDay - getTodayIndex())
+          break
+          
+        case ' ':
+        case 'enter':
+          e.preventDefault()
+          if (selectedTaskIndex >= 0 && selectedTaskIndex < currentTasks.length) {
+            toggleTaskCompletion(currentTasks[selectedTaskIndex])
+          }
+          break
+          
+        case 'e':
+          e.preventDefault()
+          if (selectedTaskIndex >= 0 && selectedTaskIndex < currentTasks.length) {
+            openEditTask(currentTasks[selectedTaskIndex])
+          }
+          break
+          
+        case 'arrowdown':
+        case 'j':
+          e.preventDefault()
+          setSelectedTaskIndex(prev => 
+            prev < currentTasks.length - 1 ? prev + 1 : prev
+          )
+          break
+          
+        case 'arrowup':
+        case 'k':
+          e.preventDefault()
+          setSelectedTaskIndex(prev => prev > 0 ? prev - 1 : 0)
+          break
+          
+        case '1':
+        case '2':
+        case '3':
+        case '4':
+        case '5':
+        case '6':
+        case '7':
+          e.preventDefault()
+          const dayIndex = parseInt(e.key) - 1
+          const todayIndex = getTodayIndex()
+          if (todayIndex + dayIndex < daySections.length) {
+            setSelectedDay(todayIndex + dayIndex)
+            setSelectedTaskIndex(0)
+          }
+          break
+          
+        case 'b':
+          e.preventDefault()
+          setSelectedDay(-1)
+          setSelectedTaskIndex(0)
+          break
+          
+        case 'c':
+          e.preventDefault()
+          setShowCompleted(!showCompleted)
+          break
+          
+        case '?':
+          e.preventDefault()
+          setShowShortcuts(true)
+          break
+          
+        default:
+          break
+      }
+    }
+    
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [selectedDay, selectedTaskIndex, daySections, editingTask, isAddingTask, showCompleted, showShortcuts])
+  
+  const getCurrentTaskList = useCallback(() => {
+    const section = getCurrentSection()
+    if (selectedDay === -1) {
+      return section.tasks || []
+    }
+    return [
+      ...(section.mustDo || []),
+      ...(section.shouldDo || []),
+      ...(section.normalTasks || []),
+    ]
+  }, [selectedDay, daySections, selectedCategory])
+  
+  // Reset selected task when changing days/filters
+  useEffect(() => {
+    setSelectedTaskIndex(0)
+  }, [selectedDay, selectedCategory])
 
   const loadTasks = async () => {
     try {
@@ -401,13 +521,25 @@ export default function TasksView() {
       <div className="max-w-5xl mx-auto p-8">
         {/* Header */}
         <div className="mb-6">
-          <h1 className="text-3xl font-bold mb-2 flex items-center gap-3">
-            <Calendar className="w-8 h-8 text-purple-400" />
-            Tasks
-          </h1>
-          <div className="text-sm text-gray-500">
-            {totalTasks} task{totalTasks !== 1 ? 's' : ''} 
-            {selectedCategory !== 'all' && ` in ${selectedCategory}`}
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold mb-2 flex items-center gap-3">
+                <Calendar className="w-8 h-8 text-purple-400" />
+                Tasks
+              </h1>
+              <div className="text-sm text-gray-500">
+                {totalTasks} task{totalTasks !== 1 ? 's' : ''} 
+                {selectedCategory !== 'all' && ` in ${selectedCategory}`}
+              </div>
+            </div>
+            <button
+              onClick={() => setShowShortcuts(true)}
+              className="px-3 py-2 bg-[#2a2a2a] hover:bg-[#3a3a3a] rounded-lg text-sm text-gray-400 hover:text-gray-300 transition-all flex items-center gap-2"
+              title="Keyboard shortcuts"
+            >
+              <Keyboard className="w-4 h-4" />
+              ?
+            </button>
           </div>
         </div>
 
@@ -499,10 +631,11 @@ export default function TasksView() {
                     <span className="text-xs text-gray-500 ml-1">({currentSection.mustDo.length})</span>
                   </div>
                   <div className="space-y-2">
-                    {currentSection.mustDo.map(task => (
+                    {currentSection.mustDo.map((task, idx) => (
                       <TaskItem 
                         key={task.id} 
                         task={task} 
+                        selected={selectedTaskIndex === idx}
                         onToggle={toggleTaskCompletion}
                         onEdit={openEditTask}
                       />
@@ -520,14 +653,18 @@ export default function TasksView() {
                     <span className="text-xs text-gray-500 ml-1">({currentSection.shouldDo.length})</span>
                   </div>
                   <div className="space-y-2">
-                    {currentSection.shouldDo.map(task => (
-                      <TaskItem 
-                        key={task.id} 
-                        task={task} 
-                        onToggle={toggleTaskCompletion}
-                        onEdit={openEditTask}
-                      />
-                    ))}
+                    {currentSection.shouldDo.map((task, idx) => {
+                      const globalIdx = (currentSection.mustDo?.length || 0) + idx
+                      return (
+                        <TaskItem 
+                          key={task.id} 
+                          task={task} 
+                          selected={selectedTaskIndex === globalIdx}
+                          onToggle={toggleTaskCompletion}
+                          onEdit={openEditTask}
+                        />
+                      )
+                    })}
                   </div>
                 </div>
               )}
@@ -536,14 +673,18 @@ export default function TasksView() {
               {currentSection.normalTasks && currentSection.normalTasks.length > 0 && (
                 <div>
                   <div className="space-y-2">
-                    {currentSection.normalTasks.map(task => (
-                      <TaskItem 
-                        key={task.id} 
-                        task={task} 
-                        onToggle={toggleTaskCompletion}
-                        onEdit={openEditTask}
-                      />
-                    ))}
+                    {currentSection.normalTasks.map((task, idx) => {
+                      const globalIdx = (currentSection.mustDo?.length || 0) + (currentSection.shouldDo?.length || 0) + idx
+                      return (
+                        <TaskItem 
+                          key={task.id} 
+                          task={task} 
+                          selected={selectedTaskIndex === globalIdx}
+                          onToggle={toggleTaskCompletion}
+                          onEdit={openEditTask}
+                        />
+                      )
+                    })}
                   </div>
                 </div>
               )}
@@ -564,10 +705,11 @@ export default function TasksView() {
             <div>
               {currentSection.tasks && currentSection.tasks.length > 0 ? (
                 <div className="space-y-2">
-                  {currentSection.tasks.map(task => (
+                  {currentSection.tasks.map((task, idx) => (
                     <TaskItem 
                       key={task.id} 
                       task={task} 
+                      selected={selectedTaskIndex === idx}
                       onToggle={toggleTaskCompletion}
                       onEdit={openEditTask}
                     />
@@ -599,10 +741,11 @@ export default function TasksView() {
                 <span className="text-xs text-gray-600 ml-1">({completedCount})</span>
               </div>
               <div className="space-y-2">
-                {filterByCategory(completedTasks).map(task => (
+                {filterByCategory(completedTasks).map((task, idx) => (
                   <TaskItem 
                     key={task.id} 
                     task={task} 
+                    selected={false}
                     onToggle={toggleTaskCompletion}
                     onEdit={openEditTask}
                   />
@@ -622,6 +765,65 @@ export default function TasksView() {
           </div>
         )}
       </div>
+
+      {/* Shortcuts Help Modal */}
+      {showShortcuts && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setShowShortcuts(false)}>
+          <div className="bg-[#1a1a1a] border border-[#3a3a3a] rounded-xl p-6 w-full max-w-lg shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold flex items-center gap-2">
+                <Keyboard className="w-5 h-5 text-purple-400" />
+                Keyboard Shortcuts
+              </h3>
+              <button
+                onClick={() => setShowShortcuts(false)}
+                className="text-gray-500 hover:text-gray-300 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <h4 className="text-sm font-medium text-gray-400 mb-2">Task Actions</h4>
+                <div className="space-y-2">
+                  <ShortcutRow keys={['n']} description="Add new task" />
+                  <ShortcutRow keys={['Space', 'Enter']} description="Toggle task completion" />
+                  <ShortcutRow keys={['e']} description="Edit selected task" />
+                </div>
+              </div>
+
+              <div>
+                <h4 className="text-sm font-medium text-gray-400 mb-2">Navigation</h4>
+                <div className="space-y-2">
+                  <ShortcutRow keys={['↑', 'k']} description="Select previous task" />
+                  <ShortcutRow keys={['↓', 'j']} description="Select next task" />
+                  <ShortcutRow keys={['1-7']} description="Jump to day (1=Today)" />
+                  <ShortcutRow keys={['b']} description="View backlog" />
+                </div>
+              </div>
+
+              <div>
+                <h4 className="text-sm font-medium text-gray-400 mb-2">View Options</h4>
+                <div className="space-y-2">
+                  <ShortcutRow keys={['c']} description="Toggle completed tasks" />
+                  <ShortcutRow keys={['?']} description="Show this help" />
+                  <ShortcutRow keys={['Esc']} description="Close modal" />
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-6 pt-4 border-t border-[#3a3a3a]">
+              <button
+                onClick={() => setShowShortcuts(false)}
+                className="w-full px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg text-sm transition-colors"
+              >
+                Got it
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Edit Modal */}
       {(editingTask || isAddingTask) && (
@@ -771,10 +973,12 @@ export default function TasksView() {
 
 function TaskItem({ 
   task, 
+  selected,
   onToggle, 
   onEdit 
 }: { 
   task: Task
+  selected: boolean
   onToggle: (task: Task) => void
   onEdit: (task: Task) => void
 }) {
@@ -788,9 +992,15 @@ function TaskItem({
           task.completed
             ? 'bg-[#1a1a1a] border-[#2a2a2a] opacity-60'
             : task.urgency === 'must'
-            ? 'bg-[#1a0f0f] border-red-500/30 hover:border-red-500/50'
+            ? selected 
+              ? 'bg-[#1a0f0f] border-red-500 ring-2 ring-red-500/50' 
+              : 'bg-[#1a0f0f] border-red-500/30 hover:border-red-500/50'
             : task.urgency === 'should'
-            ? 'bg-[#1a1a0f] border-yellow-500/30 hover:border-yellow-500/50'
+            ? selected 
+              ? 'bg-[#1a1a0f] border-yellow-500 ring-2 ring-yellow-500/50' 
+              : 'bg-[#1a1a0f] border-yellow-500/30 hover:border-yellow-500/50'
+            : selected 
+            ? 'bg-[#141414] border-purple-500 ring-2 ring-purple-500/50' 
             : 'bg-[#141414] border-[#2a2a2a] hover:border-purple-500/50'
         }
       `}
@@ -832,6 +1042,24 @@ function TaskItem({
             </span>
           )}
         </div>
+      </div>
+    </div>
+  )
+}
+
+function ShortcutRow({ keys, description }: { keys: string[], description: string }) {
+  return (
+    <div className="flex items-center justify-between text-sm">
+      <span className="text-gray-400">{description}</span>
+      <div className="flex gap-1">
+        {keys.map((key, idx) => (
+          <kbd
+            key={idx}
+            className="px-2 py-1 bg-[#2a2a2a] border border-[#3a3a3a] rounded text-xs font-mono text-gray-300"
+          >
+            {key}
+          </kbd>
+        ))}
       </div>
     </div>
   )

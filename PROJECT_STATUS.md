@@ -1,5 +1,45 @@
 # Mission Control - Project Status
 
+## ✅ V2.2.0 - Keyboard Shortcuts
+
+**Date**: February 18, 2026  
+**Status**: Production-ready
+
+### What's New
+
+#### **Comprehensive Keyboard Navigation** ⌨️
+Mission Control now feels like a native desktop app with full keyboard control:
+
+**Task Actions:**
+- `n` - Add new task
+- `Space` / `Enter` - Toggle task completion
+- `e` - Edit selected task
+
+**Navigation:**
+- `↑` / `k` - Select previous task
+- `↓` / `j` - Select next task (Vim-style)
+- `1-7` - Jump to day (1=Today, 2=Tomorrow, etc.)
+- `b` - View backlog
+
+**View Options:**
+- `c` - Toggle completed tasks
+- `?` - Show keyboard shortcuts help
+- `Esc` - Close any modal
+
+**Visual Feedback:**
+- Selected tasks highlighted with purple ring
+- Urgency-based ring colors (red for Must Do, yellow for Should Do)
+- Keyboard shortcuts help modal (`?` button in header)
+
+**UX Improvements:**
+- Shortcuts disabled when typing in inputs (smart context detection)
+- Selection resets when changing days/filters
+- Auto-scroll to selected task (coming soon)
+
+This makes task management lightning-fast for power users. No more reaching for the mouse.
+
+---
+
 ## ✅ V2.1.0 - Council → Tasks Integration
 
 **Date**: February 17, 2026  
