@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef, forwardRef } from 'react'
 import { Calendar, Filter, CheckCircle2, Circle, Clock, Flame, Plus, X, Save, Keyboard } from 'lucide-react'
 
 interface Task {
@@ -64,10 +64,23 @@ export default function TasksView() {
   // Keyboard navigation state
   const [selectedTaskIndex, setSelectedTaskIndex] = useState<number>(-1)
   const [showShortcuts, setShowShortcuts] = useState(false)
+  
+  // Ref for auto-scrolling to selected task
+  const selectedTaskRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     loadTasks()
   }, [])
+  
+  // Auto-scroll to selected task when selection changes
+  useEffect(() => {
+    if (selectedTaskIndex >= 0 && selectedTaskRef.current) {
+      selectedTaskRef.current.scrollIntoView({
+        behavior: 'smooth',
+        block: 'nearest',
+      })
+    }
+  }, [selectedTaskIndex])
   
   // Keyboard shortcuts
   useEffect(() => {
@@ -636,6 +649,7 @@ export default function TasksView() {
                         key={task.id} 
                         task={task} 
                         selected={selectedTaskIndex === idx}
+                        ref={selectedTaskIndex === idx ? selectedTaskRef : null}
                         onToggle={toggleTaskCompletion}
                         onEdit={openEditTask}
                       />
@@ -660,6 +674,7 @@ export default function TasksView() {
                           key={task.id} 
                           task={task} 
                           selected={selectedTaskIndex === globalIdx}
+                          ref={selectedTaskIndex === globalIdx ? selectedTaskRef : null}
                           onToggle={toggleTaskCompletion}
                           onEdit={openEditTask}
                         />
@@ -680,6 +695,7 @@ export default function TasksView() {
                           key={task.id} 
                           task={task} 
                           selected={selectedTaskIndex === globalIdx}
+                          ref={selectedTaskIndex === globalIdx ? selectedTaskRef : null}
                           onToggle={toggleTaskCompletion}
                           onEdit={openEditTask}
                         />
@@ -710,6 +726,7 @@ export default function TasksView() {
                       key={task.id} 
                       task={task} 
                       selected={selectedTaskIndex === idx}
+                      ref={selectedTaskIndex === idx ? selectedTaskRef : null}
                       onToggle={toggleTaskCompletion}
                       onEdit={openEditTask}
                     />
@@ -746,6 +763,7 @@ export default function TasksView() {
                     key={task.id} 
                     task={task} 
                     selected={false}
+                    ref={null}
                     onToggle={toggleTaskCompletion}
                     onEdit={openEditTask}
                   />
@@ -971,21 +989,22 @@ export default function TasksView() {
   )
 }
 
-function TaskItem({ 
-  task, 
-  selected,
-  onToggle, 
-  onEdit 
-}: { 
+const TaskItem = forwardRef<HTMLDivElement, { 
   task: Task
   selected: boolean
   onToggle: (task: Task) => void
   onEdit: (task: Task) => void
-}) {
+}>(({ 
+  task, 
+  selected,
+  onToggle, 
+  onEdit 
+}, ref) => {
   const categoryColor = CATEGORY_COLORS[task.category as keyof typeof CATEGORY_COLORS] || CATEGORY_COLORS.misc
 
   return (
     <div
+      ref={ref}
       className={`
         flex items-start gap-3 p-4 rounded-lg border transition-all hover-lift
         ${
@@ -1045,7 +1064,9 @@ function TaskItem({
       </div>
     </div>
   )
-}
+})
+
+TaskItem.displayName = 'TaskItem'
 
 function ShortcutRow({ keys, description }: { keys: string[], description: string }) {
   return (

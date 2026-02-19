@@ -1,5 +1,31 @@
 # Mission Control - Project Status
 
+## ✅ V2.3.0 - Auto-Scroll to Selected Tasks
+
+**Date**: February 19, 2026  
+**Status**: Production-ready
+
+### What's New
+
+**Auto-Scroll Navigation** 📜
+Completed the keyboard navigation experience from v2.2.0 by adding smooth auto-scrolling:
+
+- Selected task automatically scrolls into view when navigating with `j`/`k`
+- Smooth scroll behavior when jumping to days with `1-7` or backlog with `b`
+- Uses `block: 'nearest'` to avoid unnecessary jumps (keeps task visible without centering)
+- Selected task stays visible when it would be off-screen
+- Zero friction keyboard-only workflow
+
+**Implementation:**
+- Added `useRef` for selected task tracking
+- `scrollIntoView` with `behavior: 'smooth'` for buttery transitions
+- forwardRef pattern for TaskItem component
+- Conditional ref passing only to selected task
+
+This completes the "coming soon" feature from v2.2.0 and makes Mission Control feel truly native for power users who live in the keyboard.
+
+---
+
 ## ✅ V2.2.0 - Keyboard Shortcuts
 
 **Date**: February 18, 2026  
