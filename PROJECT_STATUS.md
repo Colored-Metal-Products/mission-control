@@ -1,5 +1,33 @@
 # Mission Control - Project Status
 
+## ✅ V2.4.0 - Delete Task Functionality
+
+**Date**: February 20, 2026  
+**Status**: Production-ready
+
+### What's New
+
+**Complete Task CRUD Operations** 🗑️
+Added the missing Delete functionality to complete the full CRUD (Create, Read, Update, Delete) cycle for tasks:
+
+- **Delete button in edit modal** — Red destructive button with trash icon
+- **Keyboard shortcut** — Press `d` or `Delete` key on selected task
+- **Confirmation dialog** — Prevents accidental deletions
+- **Safe file operations** — Cleanly removes task line from tasks.md
+- **Updated shortcuts help** — `?` modal now shows delete command
+
+**Implementation:**
+- Added `Trash2` icon from lucide-react
+- New `deleteTaskDirect()` function for direct deletion
+- `deleteTask()` wrapper for modal deletion with confirmation
+- Keyboard handler intercepts `d` and `Delete` keys
+- Delete button only shows when editing existing task (not when adding new)
+
+**Why it matters:**
+Tasks can now be fully managed without leaving Mission Control. No more opening tasks.md in a text editor to remove obsolete items.
+
+---
+
 ## ✅ V2.3.0 - Auto-Scroll to Selected Tasks
 
 **Date**: February 19, 2026  
