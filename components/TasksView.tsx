@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef, forwardRef } from 'react'
-import { Calendar, Filter, CheckCircle2, Circle, Clock, Flame, Plus, X, Save, Keyboard } from 'lucide-react'
+import { Calendar, Filter, CheckCircle2, Circle, Clock, Flame, Plus, X, Save, Keyboard, Trash2 } from 'lucide-react'
 
 interface Task {
   id: string
@@ -123,6 +123,17 @@ export default function TasksView() {
           e.preventDefault()
           if (selectedTaskIndex >= 0 && selectedTaskIndex < currentTasks.length) {
             openEditTask(currentTasks[selectedTaskIndex])
+          }
+          break
+          
+        case 'd':
+        case 'delete':
+          e.preventDefault()
+          if (selectedTaskIndex >= 0 && selectedTaskIndex < currentTasks.length) {
+            const taskToDelete = currentTasks[selectedTaskIndex]
+            if (confirm(`Delete task: "${taskToDelete.text}"?`)) {
+              deleteTaskDirect(taskToDelete)
+            }
           }
           break
           
@@ -467,6 +478,32 @@ export default function TasksView() {
     }
   }
 
+  const deleteTaskDirect = async (task: Task) => {
+    try {
+      const lines = rawContent.split('\n')
+      lines.splice(task.line, 1)
+      
+      const newContent = lines.join('\n')
+      await window.electron.writeFile('tasks.md', newContent)
+      await loadTasks()
+    } catch (err) {
+      console.error('Failed to delete task:', err)
+      setError('Failed to delete task')
+    }
+  }
+
+  const deleteTask = async () => {
+    if (!editingTask) return
+    
+    // Confirm deletion
+    if (!confirm(`Delete task: "${editingTask.text}"?`)) {
+      return
+    }
+
+    await deleteTaskDirect(editingTask)
+    closeEditModal()
+  }
+
   const filterByCategory = (tasks: Task[]): Task[] => {
     if (selectedCategory === 'all') return tasks
     return tasks.filter(t => t.category === selectedCategory)
@@ -808,6 +845,7 @@ export default function TasksView() {
                   <ShortcutRow keys={['n']} description="Add new task" />
                   <ShortcutRow keys={['Space', 'Enter']} description="Toggle task completion" />
                   <ShortcutRow keys={['e']} description="Edit selected task" />
+                  <ShortcutRow keys={['d', 'Delete']} description="Delete selected task" />
                 </div>
               </div>
 
@@ -966,6 +1004,16 @@ export default function TasksView() {
 
               {/* Action Buttons */}
               <div className="flex gap-3 pt-2">
+                {editingTask && (
+                  <button
+                    onClick={deleteTask}
+                    className="px-4 py-2 bg-red-600/20 hover:bg-red-600/30 text-red-400 border border-red-600/30 hover:border-red-600/50 rounded-lg text-sm transition-all flex items-center justify-center gap-2"
+                    title="Delete task (cannot be undone)"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    Delete
+                  </button>
+                )}
                 <button
                   onClick={closeEditModal}
                   className="flex-1 px-4 py-2 bg-[#2a2a2a] hover:bg-[#3a3a3a] rounded-lg text-sm transition-colors"
