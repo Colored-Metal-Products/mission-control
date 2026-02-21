@@ -3,11 +3,16 @@
 import { useState, useEffect, useRef } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { FileInfo, FileContent } from '@/types/electron'
+import { FileInfo, FileContent, SemanticResult } from '@/types/electron'
+import { Brain, Search } from 'lucide-react'
+
+type SearchMode = 'keyword' | 'semantic'
 
 export default function SearchView() {
   const [query, setQuery] = useState('')
-  const [results, setResults] = useState<FileInfo[]>([])
+  const [mode, setMode] = useState<SearchMode>('keyword')
+  const [keywordResults, setKeywordResults] = useState<FileInfo[]>([])
+  const [semanticResults, setSemanticResults] = useState<SemanticResult[]>([])
   const [selectedFile, setSelectedFile] = useState<string | null>(null)
   const [fileContent, setFileContent] = useState<FileContent | null>(null)
   const [searching, setSearching] = useState(false)
@@ -18,30 +23,51 @@ export default function SearchView() {
     inputRef.current?.focus()
   }, [])
 
-  const handleSearch = async () => {
+  const handleKeywordSearch = async () => {
     if (!query.trim()) {
-      setResults([])
+      setKeywordResults([])
       return
     }
 
     try {
       setSearching(true)
       const searchResults = await window.electron.searchFiles(query)
-      setResults(searchResults)
+      setKeywordResults(searchResults)
       setSearching(false)
     } catch (error) {
-      console.error('Search failed:', error)
+      console.error('Keyword search failed:', error)
+      setSearching(false)
+    }
+  }
+
+  const handleSemanticSearch = async () => {
+    if (!query.trim()) {
+      setSemanticResults([])
+      return
+    }
+
+    try {
+      setSearching(true)
+      const searchResults = await window.electron.semanticSearch(query)
+      setSemanticResults(searchResults)
+      setSearching(false)
+    } catch (error) {
+      console.error('Semantic search failed:', error)
       setSearching(false)
     }
   }
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      handleSearch()
+      if (mode === 'keyword') {
+        handleKeywordSearch()
+      } else {
+        handleSemanticSearch()
+      }
     }, 300)
 
     return () => clearTimeout(timer)
-  }, [query])
+  }, [query, mode])
 
   const loadFileContent = async (filePath: string) => {
     try {
@@ -78,15 +104,49 @@ export default function SearchView() {
     )
   }
 
+  const results = mode === 'keyword' ? keywordResults : semanticResults
+  const hasResults = results.length > 0
+
   return (
     <div className="flex h-full">
       <div className="w-[400px] bg-[#141414] border-r border-[#2a2a2a] flex flex-col overflow-hidden">
         <div className="p-4">
+          {/* Search Mode Toggle */}
+          <div className="flex gap-2 mb-3">
+            <button
+              onClick={() => setMode('keyword')}
+              className={`
+                flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors
+                ${mode === 'keyword' 
+                  ? 'bg-purple-600 text-white' 
+                  : 'bg-[#2a2a2a] text-gray-400 hover:bg-[#333]'
+                }
+              `}
+            >
+              <Search className="w-4 h-4" />
+              Keyword
+            </button>
+            <button
+              onClick={() => setMode('semantic')}
+              className={`
+                flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors
+                ${mode === 'semantic' 
+                  ? 'bg-purple-600 text-white' 
+                  : 'bg-[#2a2a2a] text-gray-400 hover:bg-[#333]'
+                }
+              `}
+            >
+              <Brain className="w-4 h-4" />
+              Semantic
+            </button>
+          </div>
+
+          {/* Search Input */}
           <div className="relative">
             <input
               ref={inputRef}
               type="text"
-              placeholder="Search all markdown files..."
+              placeholder={mode === 'keyword' ? 'Search all markdown files...' : 'Ask a question about your memory...'}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               className="w-full px-4 py-3 bg-[#2a2a2a] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 pr-10"
@@ -99,12 +159,17 @@ export default function SearchView() {
           </div>
 
           <div className="mt-3 text-xs text-gray-500">
-            {results.length > 0 && `${results.length} result${results.length !== 1 ? 's' : ''} found`}
+            {hasResults && (
+              <>
+                {results.length} result{results.length !== 1 ? 's' : ''} found
+                {mode === 'semantic' && ' (by meaning)'}
+              </>
+            )}
           </div>
         </div>
 
         <div className="flex-1 overflow-y-auto px-4 pb-4">
-          {query && results.length === 0 && !searching && (
+          {query && !hasResults && !searching && (
             <div className="text-sm text-gray-500 text-center py-8">
               No results found for "{query}"
             </div>
@@ -112,12 +177,13 @@ export default function SearchView() {
 
           {!query && (
             <div className="text-sm text-gray-500 text-center py-8">
-              Type to search across all markdown files
+              {mode === 'keyword' ? 'Type to search across all markdown files' : 'Ask a question to search by meaning'}
             </div>
           )}
 
           <div className="space-y-2">
-            {results.map((result) => (
+            {/* Keyword Results */}
+            {mode === 'keyword' && keywordResults.map((result) => (
               <button
                 key={result.path}
                 onClick={() => loadFileContent(result.path)}
@@ -143,6 +209,42 @@ export default function SearchView() {
                 )}
                 <div className="text-xs text-gray-500 mt-2">
                   {formatFileSize(result.size)} · Modified {formatDate(result.modified)}
+                </div>
+              </button>
+            ))}
+
+            {/* Semantic Results */}
+            {mode === 'semantic' && semanticResults.map((result, idx) => (
+              <button
+                key={`${result.file}-${result.line}`}
+                onClick={() => loadFileContent(result.file)}
+                className={`
+                  w-full p-4 rounded-lg text-left transition-colors
+                  ${
+                    selectedFile === result.file
+                      ? 'bg-purple-600/20 border border-purple-500'
+                      : 'bg-[#1a1a1a] hover:bg-[#2a2a2a]'
+                  }
+                `}
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <div className="font-medium text-sm">
+                    {result.file.split('/').pop()?.replace('.md', '')}
+                  </div>
+                  <div className="flex items-center gap-1 text-xs">
+                    <Brain className="w-3 h-3 text-purple-400" />
+                    <span className={`
+                      ${result.score >= 0.7 ? 'text-green-400' : result.score >= 0.5 ? 'text-yellow-400' : 'text-gray-400'}
+                    `}>
+                      {(result.score * 100).toFixed(0)}%
+                    </span>
+                  </div>
+                </div>
+                <div className="text-xs text-gray-500 mb-2">
+                  {result.file}#{result.line}
+                </div>
+                <div className="text-xs text-gray-400 line-clamp-3">
+                  {result.text}
                 </div>
               </button>
             ))}
@@ -176,7 +278,7 @@ export default function SearchView() {
           </>
         ) : (
           <div className="flex items-center justify-center h-full text-gray-500">
-            {query ? 'Select a search result to view' : 'Start typing to search'}
+            {query ? 'Select a search result to view' : mode === 'keyword' ? 'Start typing to search' : 'Ask a question to search by meaning'}
           </div>
         )}
       </div>

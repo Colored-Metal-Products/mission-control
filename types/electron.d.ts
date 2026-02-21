@@ -8,6 +8,13 @@ export interface FileInfo {
   preview?: string;
 }
 
+export interface SemanticResult {
+  file: string;
+  line: number;
+  text: string;
+  score: number;
+}
+
 export interface FileContent {
   content: string;
   size: number;
@@ -76,6 +83,7 @@ interface ElectronAPI {
   writeFile: (filePath: string, content: string) => Promise<{ success: boolean; size: number; modified: string }>;
   listFiles: (dirPath: string) => Promise<FileInfo[]>;
   searchFiles: (query: string) => Promise<FileInfo[]>;
+  semanticSearch: (query: string) => Promise<SemanticResult[]>;
   watchFile: (filePath: string) => Promise<boolean>;
   getMemoryFiles: () => Promise<MemoryFiles>;
   getDocs: () => Promise<FileInfo[]>;

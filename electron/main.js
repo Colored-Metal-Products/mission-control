@@ -306,6 +306,26 @@ function getPreview(content, query) {
   return content.substring(0, 200);
 }
 
+ipcMain.handle('semantic-search', async (event, query) => {
+  try {
+    const { execFile } = require('child_process');
+    const { promisify } = require('util');
+    const execFileAsync = promisify(execFile);
+    
+    const indexScript = path.join(WORKSPACE_PATH, 'scripts', 'semantic-index.js');
+    const { stdout } = await execFileAsync('node', [indexScript, 'query', query, '--json'], {
+      timeout: 30000,
+      env: AGENT_ENV
+    });
+    
+    // Parse the JSON output from semantic-index.js
+    const results = JSON.parse(stdout.trim());
+    return results;
+  } catch (error) {
+    throw new Error(`Semantic search failed: ${error.message}`);
+  }
+});
+
 ipcMain.handle('watch-file', async (event, filePath) => {
   const fullPath = path.join(WORKSPACE_PATH, filePath);
   

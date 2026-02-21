@@ -6,6 +6,7 @@ contextBridge.exposeInMainWorld('electron', {
   writeFile: (filePath, content) => ipcRenderer.invoke('write-file', filePath, content),
   listFiles: (dirPath) => ipcRenderer.invoke('list-files', dirPath),
   searchFiles: (query) => ipcRenderer.invoke('search-files', query),
+  semanticSearch: (query) => ipcRenderer.invoke('semantic-search', query),
   watchFile: (filePath) => ipcRenderer.invoke('watch-file', filePath),
   getMemoryFiles: () => ipcRenderer.invoke('get-memory-files'),
   getDocs: () => ipcRenderer.invoke('get-docs'),

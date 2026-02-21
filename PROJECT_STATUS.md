@@ -1,5 +1,34 @@
 # Mission Control - Project Status
 
+## ✅ V2.5.0 - Semantic Search Integration
+
+**Date**: February 21, 2026  
+**Status**: Production-ready
+
+### What's New
+
+**AI-Powered Semantic Search** 🧠
+Integrated the local Llama semantic search index built on Feb 20 into Mission Control's search view:
+
+- **Dual search modes** — Toggle between Keyword and Semantic search
+- **Semantic understanding** — Searches by meaning, not just exact text matches
+- **Similarity scoring** — Each result shows a match percentage (green ≥70%, yellow ≥50%)
+- **Local & free** — Uses Llama 3.1 8B via Ollama, zero API costs
+- **Smart placeholders** — UI adapts to the selected mode
+- **Results by line** — Semantic results show file name and line number for precision
+
+**Implementation:**
+- Added `semantic-search` IPC handler in main.js
+- Enhanced `semantic-index.js` with `--json` flag for structured output
+- Updated SearchView.tsx with mode toggle (Keyword vs Semantic)
+- Brain icon + percentage-based similarity display
+- Color-coded scores (green/yellow/gray based on confidence)
+
+**Why it matters:**
+You can now ask natural questions like "what did we decide about the quote builder?" instead of guessing keywords. The semantic index understands context and returns relevant chunks even when exact words don't match. This completes the semantic search stack from last night's cron build.
+
+---
+
 ## ✅ V2.4.0 - Delete Task Functionality
 
 **Date**: February 20, 2026  
