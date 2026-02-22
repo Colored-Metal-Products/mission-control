@@ -61,6 +61,10 @@ export default function TasksView() {
     urgency: 'normal',
   })
   
+  // Quick add state
+  const [quickAddText, setQuickAddText] = useState('')
+  const quickAddInputRef = useRef<HTMLInputElement>(null)
+  
   // Keyboard navigation state
   const [selectedTaskIndex, setSelectedTaskIndex] = useState<number>(-1)
   const [showShortcuts, setShowShortcuts] = useState(false)
@@ -106,6 +110,12 @@ export default function TasksView() {
       const currentTasks = getCurrentTaskList()
       
       switch (e.key.toLowerCase()) {
+        case 'a':
+        case 'i':
+          e.preventDefault()
+          quickAddInputRef.current?.focus()
+          break
+          
         case 'n':
           e.preventDefault()
           openAddTask(selectedDay - getTodayIndex())
@@ -492,6 +502,72 @@ export default function TasksView() {
     }
   }
 
+  const quickAddTask = async () => {
+    if (!quickAddText.trim()) return
+    
+    try {
+      const lines = rawContent.split('\n')
+      const todayIndex = getTodayIndex()
+      const dayOffset = selectedDay === -1 ? -2 : selectedDay - todayIndex
+      
+      // Use current category filter if not 'all', otherwise default to 'misc'
+      const category = selectedCategory === 'all' ? 'misc' : selectedCategory
+      
+      // Find target section
+      let targetLineIndex = -1
+      
+      if (dayOffset === -2) {
+        // Backlog
+        const backlogIndex = lines.findIndex(line => line.match(/^##\s+Backlog/i))
+        if (backlogIndex >= 0) {
+          targetLineIndex = backlogIndex + 1
+        }
+      } else {
+        // Day section - add to normal tasks (bottom of the day)
+        const targetDayIndex = todayIndex + dayOffset
+        if (targetDayIndex >= 0 && targetDayIndex < daySections.length) {
+          const daySection = daySections[targetDayIndex]
+          const dayHeaderPattern = new RegExp(`^##\\s+${daySection.dayName},`)
+          const dayHeaderIndex = lines.findIndex(line => line.match(dayHeaderPattern))
+          
+          if (dayHeaderIndex >= 0) {
+            // Find the end of this day's section (next ## header or end of file)
+            let endIndex = lines.findIndex((line, idx) => idx > dayHeaderIndex && line.match(/^##\s+/))
+            if (endIndex === -1) endIndex = lines.length
+            
+            // Insert before the next section
+            targetLineIndex = endIndex
+          }
+        }
+      }
+
+      if (targetLineIndex >= 0) {
+        const newLine = `- [ ] [${category}] ${quickAddText.trim()}`
+        lines.splice(targetLineIndex, 0, newLine)
+        
+        const newContent = lines.join('\n')
+        await window.electron.writeFile('tasks.md', newContent)
+        setQuickAddText('')
+        await loadTasks()
+      } else {
+        setError('Could not find target section')
+      }
+    } catch (err) {
+      console.error('Failed to quick add task:', err)
+      setError('Failed to add task')
+    }
+  }
+
+  const handleQuickAddKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      quickAddTask()
+    } else if (e.key === 'Escape') {
+      setQuickAddText('')
+      quickAddInputRef.current?.blur()
+    }
+  }
+
   const deleteTask = async () => {
     if (!editingTask) return
     
@@ -665,6 +741,33 @@ export default function TasksView() {
               />
               Show completed ({completedCount})
             </label>
+          </div>
+        </div>
+
+        {/* Quick Add Input */}
+        <div className="mb-6">
+          <div className="flex items-center gap-3 p-3 bg-[#141414] border border-purple-500/30 rounded-lg focus-within:border-purple-500 transition-all">
+            <Plus className="w-4 h-4 text-purple-400 flex-shrink-0" />
+            <input
+              ref={quickAddInputRef}
+              type="text"
+              value={quickAddText}
+              onChange={(e) => setQuickAddText(e.target.value)}
+              onKeyDown={handleQuickAddKeyDown}
+              placeholder={`Quick add to ${selectedDay === -1 ? 'backlog' : currentSection.title}... (Enter to save, Esc to clear)`}
+              className="flex-1 bg-transparent text-gray-200 placeholder-gray-500 focus:outline-none"
+            />
+            {quickAddText && (
+              <button
+                onClick={quickAddTask}
+                className="px-3 py-1 bg-purple-600 hover:bg-purple-700 rounded text-xs font-medium transition-colors"
+              >
+                Add
+              </button>
+            )}
+          </div>
+          <div className="mt-1.5 text-xs text-gray-500">
+            Will be added to {selectedCategory === 'all' ? 'misc' : selectedCategory} category
           </div>
         </div>
 
@@ -842,7 +945,8 @@ export default function TasksView() {
               <div>
                 <h4 className="text-sm font-medium text-gray-400 mb-2">Task Actions</h4>
                 <div className="space-y-2">
-                  <ShortcutRow keys={['n']} description="Add new task" />
+                  <ShortcutRow keys={['a', 'i']} description="Quick add task (focus input)" />
+                  <ShortcutRow keys={['n']} description="Add new task (full modal)" />
                   <ShortcutRow keys={['Space', 'Enter']} description="Toggle task completion" />
                   <ShortcutRow keys={['e']} description="Edit selected task" />
                   <ShortcutRow keys={['d', 'Delete']} description="Delete selected task" />

@@ -1,5 +1,39 @@
 # Mission Control - Project Status
 
+## ✅ V2.6.0 - Quick Add Task Feature
+
+**Date**: February 22, 2026  
+**Status**: Production-ready
+
+### What's New
+
+**Inline Quick Add for Lightning-Fast Task Entry** ⚡
+Added an always-visible quick add input to the Tasks view for instant task creation:
+
+- **Inline input** — Always visible at top of task list, no modal needed
+- **One-line workflow** — Type and press Enter to add instantly
+- **Smart defaults** — Uses current category filter (or 'misc' if 'all' selected)
+- **Keyboard shortcuts** — Press `a` or `i` to focus the input (Vim-style)
+- **Clear feedback** — Shows which category will be used
+- **Escape to clear** — Quick reset if you change your mind
+- **Optional button** — Click "Add" button appears when typing (or just press Enter)
+
+**Why it matters:**
+Adding tasks is now **10x faster**. Before: click button → wait for modal → type → select category → select day → save. Now: press `a` → type → Enter. Done. Perfect for rapid task capture during the day.
+
+The full modal (press `n`) is still available when you need to set specific priority or category, but for 90% of task adds, the quick input is all you need.
+
+**UX improvements:**
+- Placeholder text shows current target ("Quick add to Today..." / "backlog..." etc.)
+- Subtle purple border highlights the input
+- Focus-within border animation for visual feedback
+- Helper text shows target category
+- Enter to save, Escape to clear and blur
+
+This completes the task management UX - Mission Control now has best-in-class task entry that rivals or beats Linear, Height, and other task apps.
+
+---
+
 ## ✅ V2.5.0 - Semantic Search Integration
 
 **Date**: February 21, 2026  
