@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import Sidebar from '@/components/Sidebar'
 import TopBar from '@/components/TopBar'
+import DashboardView from '@/components/DashboardView'
 import MemoryView from '@/components/MemoryView'
 import ProjectsView from '@/components/ProjectsView'
 import TasksView from '@/components/TasksView'
@@ -16,10 +17,10 @@ import WorkspacesView from '@/components/WorkspacesView'
 import { FileText, CheckCircle, Users, UserCircle, Building, UsersRound } from 'lucide-react'
 import ApprovalsView from '@/components/ApprovalsView'
 
-type ViewType = 'tasks' | 'content' | 'approvals' | 'council' | 'calendar' | 'projects' | 'memory' | 'docs' | 'people' | 'office' | 'team' | 'search'
+type ViewType = 'dashboard' | 'tasks' | 'content' | 'approvals' | 'council' | 'calendar' | 'projects' | 'memory' | 'docs' | 'people' | 'office' | 'team' | 'search'
 
 export default function Home() {
-  const [currentView, setCurrentView] = useState<ViewType>('tasks')
+  const [currentView, setCurrentView] = useState<ViewType>('dashboard')
   const [searchOpen, setSearchOpen] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [refreshKey, setRefreshKey] = useState(0)
@@ -39,6 +40,8 @@ export default function Home() {
 
   const renderView = () => {
     switch (currentView) {
+      case 'dashboard':
+        return <DashboardView />
       case 'memory':
         return <MemoryView />
       case 'projects':
@@ -72,7 +75,7 @@ export default function Home() {
           Icon={UsersRound}
         />
       default:
-        return <MemoryView />
+        return <DashboardView />
     }
   }
 

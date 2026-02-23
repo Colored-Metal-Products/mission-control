@@ -1,6 +1,7 @@
 'use client'
 
 import { 
+  Home,
   CheckSquare, 
   FileText, 
   CheckCircle, 
@@ -16,12 +17,13 @@ import {
 
 interface SidebarProps {
   currentView: string
-  onViewChange: (view: 'tasks' | 'content' | 'approvals' | 'council' | 'calendar' | 'projects' | 'memory' | 'docs' | 'people' | 'office' | 'team' | 'search') => void
+  onViewChange: (view: 'dashboard' | 'tasks' | 'content' | 'approvals' | 'council' | 'calendar' | 'projects' | 'memory' | 'docs' | 'people' | 'office' | 'team' | 'search') => void
   isOpen: boolean
 }
 
 export default function Sidebar({ currentView, onViewChange, isOpen }: SidebarProps) {
   const items = [
+    { id: 'dashboard', label: 'Dashboard', icon: Home },
     { id: 'tasks', label: 'Tasks', icon: CheckSquare },
     { id: 'content', label: 'Content', icon: FileText },
     { id: 'approvals', label: 'Approvals', icon: CheckCircle },
