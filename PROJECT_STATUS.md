@@ -1,5 +1,51 @@
 # Mission Control - Project Status
 
+## ✅ V2.7.0 - Dashboard View
+
+**Date**: February 23, 2026  
+**Status**: Production-ready
+
+### What's New
+
+**Mission Control Central Command** 🏠
+Added a comprehensive Dashboard view that serves as the home base for Mission Control:
+
+- **Real-time clock** — Current time updates every minute with full date display
+- **Stats at a glance** — Four key metrics cards:
+  - Must Do Today (red gradient, flame icon)
+  - Total Tasks Today (purple gradient, checkmark icon)
+  - Completed Today (green gradient, trending icon)
+  - Backlog Count (gray gradient, file icon)
+- **Top Priority section** — Shows top 3 must-do tasks for today in numbered priority order
+- **Next Up card** — Displays upcoming scheduled event with countdown timer
+- **Recent Memory** — Shows count of memory entries from the past week
+- **Pending Approvals** — Highlights items awaiting review (when applicable)
+- **Quick Actions** — Shortcut buttons for common tasks
+
+**Why it matters:**
+Previously, Mission Control defaulted to the Tasks view, which was functional but not inspirational. The Dashboard provides context and orientation — you know what time it is, what's urgent, what's coming up, and how you're doing. It's the true "mission control" view.
+
+**Technical implementation:**
+- Parses tasks.md to count today's must-do, should-do, total, and backlog tasks
+- Parses HEARTBEAT.md to calculate next scheduled event with smart countdown
+- Polls memory files to count recent entries
+- Checks council-approvals.json for pending items
+- Updates clock every 60 seconds via setInterval
+- Gradient stat cards with lucide-react icons
+- Hover lift effects on all interactive elements
+- Made Dashboard the default view (first in sidebar, Home icon)
+
+**UX polish:**
+- Smooth animations and transitions
+- Color-coded urgency (red for must-do, purple for tasks, green for completed)
+- Responsive grid layout (1 column mobile, 2 columns tablet, 4 columns desktop)
+- Loading skeleton animations
+- Professional gradient cards with proper spacing
+
+This transforms Mission Control from a tools collection into a true command center.
+
+---
+
 ## ✅ V2.6.0 - Quick Add Task Feature
 
 **Date**: February 22, 2026  
