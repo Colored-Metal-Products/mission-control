@@ -1,5 +1,51 @@
 # Mission Control - Project Status
 
+## ✅ V2.8.0 - Approvals View
+
+**Date**: February 24, 2026  
+**Status**: Production-ready
+
+### What's New
+
+**Full Approvals Queue Management** ✅
+Replaced the "Coming Soon" placeholder with a fully functional Approvals view that integrates with the Council workflow:
+
+- **Smart filtering** — Four filter tabs (Pending, Approved, Rejected, All) with live counts
+- **Visual status indicators** — Color-coded borders and icons (yellow=pending, green=approved, red=rejected)
+- **Detailed proposal cards** — Shows submitter (with emoji + role), title, summary, category, and timestamps
+- **Expandable details** — Click "Show Details" to reveal full proposal context
+- **One-click approval/rejection** — Approve or reject pending items with instant status update
+- **Create tasks from approved items** — Convert approved proposals into tasks.md entries with one click
+- **Task tracking** — Shows which approved items have already been converted to tasks
+- **Real queue data** — Reads from `approvals/queue.json` with live data
+- **Council integration** — Works seamlessly with Council Execution mode workflow
+
+**Why it matters:**
+The Approvals queue is a critical part of the Council workflow. When Council members propose initiatives in Execution mode, they route to Approvals for Jamie's sign-off. This view closes that loop — Jamie can now review, approve/reject, and convert approved items into tracked tasks without leaving Mission Control.
+
+**Technical implementation:**
+- New `ApprovalsView.tsx` component (400+ lines)
+- Reads/writes `approvals/queue.json` with approval state
+- Color-coded category badges (marketing, forge, finance, ops, etc.)
+- Status-specific styling (pending, approved, rejected)
+- "Create Task" button writes to `tasks.md` under Today section
+- Tracks task creation with `taskCreated` and `taskCreatedAt` fields
+- Smart time formatting ("5m ago", "2h ago", "Yesterday", etc.)
+- Smooth animations and transitions
+
+**UX improvements:**
+- Filter tabs with live count badges
+- Hover effects on cards
+- Expandable details panel
+- Loading and error states
+- Disabled states during processing
+- Clear visual hierarchy
+- Responsive layout
+
+This completes the Council → Approvals → Tasks workflow and makes Mission Control a true operational command center.
+
+---
+
 ## ✅ V2.7.0 - Dashboard View
 
 **Date**: February 23, 2026  
